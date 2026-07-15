@@ -146,8 +146,8 @@ contract rather than duplicating its source-change logic.
 
 `DerivedDataCache` stores immutable importer artifacts under a SHA-256 key.
 `MakeDerivedDataKey()` includes the source fingerprint, importer identifier,
-importer version, and canonical settings, so changing any input cannot reuse a
-stale artifact. It provides content-addressed `Store`, `Load`, and `Contains`
+importer version, expected asset type, and canonical settings, so changing any
+input cannot reuse a stale or mistyped artifact. It provides content-addressed `Store`, `Load`, and `Contains`
 operations only; eviction policy, background importing, and file watching are
 deliberately separate orchestration concerns.
 
@@ -163,18 +163,23 @@ tools.
 
 ## Import Execution
 
-`AssetImporter` is a pure byte-to-byte plugin contract. `ImportSourceAsset()`
+`AssetImporter` is a pure source-to-artifact plugin contract. `ImportSourceAsset()`
 owns the transaction: it validates the selected importer against registry
 metadata, reads the project-relative source, fingerprints it, builds a derived
-cache key, publishes importer output, and only then records the successful
-provenance. `PassthroughImporter` is a working importer for opaque documents,
-scripts, and raw source artifacts. Typed mesh/material/texture importers will
-use this exact transaction rather than owning their own cache or reimport rules.
+cache key, validates the plugin's declared type, serializes a portable artifact
+envelope, publishes it, and only then records successful provenance. Cache hits
+are parsed and type-checked too, so corrupt or stale cache data cannot silently
+enter runtime loading. `PassthroughImporter` is a working typed importer for
+opaque documents, scripts, and raw source artifacts. Mesh/material/texture
+importers use this transaction rather than owning cache or reimport rules.
 
 `DerivedArtifact` defines the versioned output envelope for those plugins:
 declared asset type, stable format identifier, positive format version, and
-opaque payload. KairoAssets validates the envelope; runtime loaders own the
-meaning of each payload format.
+opaque payload. `SerializeDerivedArtifact()` writes an endian-independent
+`KAIRODD1` binary envelope using stable asset-type names, while
+`ParseDerivedArtifact()` rejects unknown versions/types, truncation, oversized
+fields, malformed format names, and trailing bytes. Runtime loaders own the
+meaning of each validated payload format.
 
 ## Next Asset Milestones
 
@@ -184,9 +189,9 @@ A2 deterministic validated manifest persistence      complete
 A3 source fingerprints + validated import provenance     complete
 A4 content-addressed derived-data cache                    complete
 A5 portable source observation and reimport signals         complete
-A6 executable importer transaction + raw source importer    complete
-A6 typed mesh/material/texture/scene decoder plugins         next
-A7 editor asset browser, thumbnails, drag/drop
+A6 executable typed importer transaction + raw importer     complete
+A7 mesh/material/texture/scene decoder plugins               next
+A8 editor asset browser, thumbnails, drag/drop
 ```
 
 Runtime loaders will depend on `KairoAssets`; this repository will not depend

@@ -30,6 +30,17 @@ namespace
     {
         return { id, type, AssetOrigin::SourceFile, std::move(path), "test.importer", 1u, {} };
     }
+
+    class MistypedImporter final : public AssetImporter
+    {
+    public:
+        [[nodiscard]] std::string Identifier() const override { return "kairo.mistyped"; }
+        [[nodiscard]] std::string Version() const override { return "1"; }
+        [[nodiscard]] DerivedArtifact Import(const ImportRequest&) const override
+        {
+            return { AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
+        }
+    };
 }
 
 TEST_CASE("Asset IDs round-trip canonical UUID text", "[KairoAssets][Identity]")
@@ -115,9 +126,11 @@ TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAsset
 {
     const std::array<std::byte, 3u> source{ std::byte{ 'a' }, std::byte{ 'b' }, std::byte{ 'c' } };
     const AssetFingerprint fingerprint = FingerprintBytes(source);
-    const DerivedDataKey key = MakeDerivedDataKey(fingerprint, "kairo.obj", "1.0", "triangulate=true");
-    CHECK(key != MakeDerivedDataKey(fingerprint, "kairo.obj", "1.1", "triangulate=true"));
-    CHECK(key != MakeDerivedDataKey(fingerprint, "kairo.obj", "1.0", "triangulate=false"));
+    const DerivedDataKey key = MakeDerivedDataKey(fingerprint, AssetType::Mesh,
+        "kairo.obj", "1.0", "triangulate=true");
+    CHECK(key != MakeDerivedDataKey(fingerprint, AssetType::Mesh, "kairo.obj", "1.1", "triangulate=true"));
+    CHECK(key != MakeDerivedDataKey(fingerprint, AssetType::Mesh, "kairo.obj", "1.0", "triangulate=false"));
+    CHECK(key != MakeDerivedDataKey(fingerprint, AssetType::Document, "kairo.obj", "1.0", "triangulate=true"));
 
     const std::filesystem::path root = std::filesystem::temp_directory_path() /
         ("kairo-cache-" + GenerateAssetID().ToString());
@@ -127,6 +140,10 @@ TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAsset
     cache.Store(key, artifact);
     CHECK(cache.Contains(key));
     CHECK(cache.Load(key) == std::vector<std::byte>(artifact.begin(), artifact.end()));
+    CHECK_NOTHROW(cache.Store(key, artifact));
+    const std::array<std::byte, 1u> conflicting{ std::byte{ 9u } };
+    REQUIRE_THROWS_AS(cache.Store(key, conflicting), std::logic_error);
+    CHECK(cache.Load(key) == std::vector<std::byte>(artifact.begin(), artifact.end()));
     CHECK(DerivedDataKey::Parse(key.ToString()) == key);
     std::filesystem::remove_all(root);
 }
@@ -135,10 +152,33 @@ TEST_CASE("Derived artifacts require a stable declared format", "[KairoAssets][A
 {
     DerivedArtifact artifact{ AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
     CHECK_NOTHROW(ValidateDerivedArtifact(artifact));
+    const std::vector<std::byte> bytes = SerializeDerivedArtifact(artifact);
+    const DerivedArtifact parsed = ParseDerivedArtifact(bytes);
+    CHECK(parsed.Type == artifact.Type);
+    CHECK(parsed.FormatVersion == artifact.FormatVersion);
+    CHECK(parsed.Format == artifact.Format);
+    CHECK(parsed.Payload == artifact.Payload);
+
+    std::vector<std::byte> corrupt = bytes;
+    corrupt.front() = std::byte{ 0u };
+    REQUIRE_THROWS_AS(ParseDerivedArtifact(corrupt), std::invalid_argument);
+    corrupt = bytes;
+    corrupt.pop_back();
+    REQUIRE_THROWS_AS(ParseDerivedArtifact(corrupt), std::invalid_argument);
+    corrupt = bytes;
+    corrupt.push_back(std::byte{ 0u });
+    REQUIRE_THROWS_AS(ParseDerivedArtifact(corrupt), std::invalid_argument);
+    corrupt = bytes;
+    corrupt[8u] = std::byte{ 2u };
+    REQUIRE_THROWS_AS(ParseDerivedArtifact(corrupt), std::invalid_argument);
+
     artifact.Format.clear();
     REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
     artifact.Format = "kairo.mesh.v1";
     artifact.FormatVersion = 0u;
+    REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
+    artifact.FormatVersion = 1u;
+    artifact.Type = static_cast<AssetType>(999);
     REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
 }
 
@@ -174,9 +214,63 @@ TEST_CASE("Import service caches successful plugin output before recording prove
     ImportDatabase imports; DerivedDataCache cache(root / "cache"); PassthroughImporter importer;
     ImportRecord record{ asset, "source/data.txt", importer.Identifier(), importer.Version(), "", {}, 1u };
     const ImportOutcome first = ImportSourceAsset(root, record, importer, registry, imports, cache);
-    CHECK_FALSE(first.CacheHit); CHECK(cache.Load(first.Key).size() == 5u); CHECK(imports.Evaluate(root, asset) == SourceImportState::Current);
+    CHECK_FALSE(first.CacheHit);
+    CHECK(first.Artifact.Type == AssetType::Document);
+    CHECK(first.Artifact.Format == "kairo.raw.v1");
+    CHECK(first.Artifact.Payload.size() == 5u);
+    CHECK(ParseDerivedArtifact(cache.Load(first.Key)).Payload == first.Artifact.Payload);
+    CHECK(imports.Evaluate(root, asset) == SourceImportState::Current);
     const ImportOutcome second = ImportSourceAsset(root, imports.At(asset), importer, registry, imports, cache);
-    CHECK(second.CacheHit); CHECK(second.Key == first.Key);
+    CHECK(second.CacheHit); CHECK(second.Key == first.Key); CHECK(second.Artifact.Payload == first.Artifact.Payload);
+
+    // A present cache file is not automatically trusted. A failed parse must
+    // leave the last-successful provenance record untouched.
+    { std::ofstream file(cache.PathFor(first.Key), std::ios::binary | std::ios::trunc); file << "corrupt"; }
+    REQUIRE_THROWS_AS(ImportSourceAsset(root, imports.At(asset), importer, registry, imports, cache), std::invalid_argument);
+    CHECK(imports.At(asset).Revision == 1u);
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("Import service rejects mistyped plugin output before publication", "[KairoAssets][Importer]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-mistyped-importer-" + GenerateAssetID().ToString());
+    std::filesystem::create_directories(root / "source");
+    { std::ofstream file(root / "source/data.txt", std::ios::binary); file << "kairo"; }
+    AssetRegistry registry;
+    MistypedImporter importer;
+    const AssetID asset = registry.Create({ AssetType::Document, AssetOrigin::SourceFile,
+        "assets/data", importer.Identifier(), {} });
+    ImportDatabase imports;
+    DerivedDataCache cache(root / "cache");
+    ImportRecord record{ asset, "source/data.txt", importer.Identifier(), importer.Version(), "", {}, 1u };
+    const DerivedDataKey key = MakeDerivedDataKey(FingerprintFile(root / "source/data.txt"),
+        AssetType::Document, importer.Identifier(), importer.Version(), "");
+    REQUIRE_THROWS_AS(ImportSourceAsset(root, record, importer, registry, imports, cache), std::invalid_argument);
+    CHECK_FALSE(cache.Contains(key));
+    CHECK(imports.Size() == 0u);
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("Import service rejects a cached artifact with the wrong type", "[KairoAssets][Importer]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-mistyped-cache-" + GenerateAssetID().ToString());
+    std::filesystem::create_directories(root / "source");
+    { std::ofstream file(root / "source/data.txt", std::ios::binary); file << "kairo"; }
+    AssetRegistry registry;
+    PassthroughImporter importer;
+    const AssetID asset = registry.Create({ AssetType::Document, AssetOrigin::SourceFile,
+        "assets/data", importer.Identifier(), {} });
+    ImportDatabase imports;
+    DerivedDataCache cache(root / "cache");
+    ImportRecord record{ asset, "source/data.txt", importer.Identifier(), importer.Version(), "", {}, 1u };
+    const DerivedDataKey key = MakeDerivedDataKey(FingerprintFile(root / "source/data.txt"),
+        AssetType::Document, importer.Identifier(), importer.Version(), "");
+    const DerivedArtifact wrongType{ AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
+    cache.Store(key, SerializeDerivedArtifact(wrongType));
+    REQUIRE_THROWS_AS(ImportSourceAsset(root, record, importer, registry, imports, cache), std::invalid_argument);
+    CHECK(imports.Size() == 0u);
     std::filesystem::remove_all(root);
 }
 

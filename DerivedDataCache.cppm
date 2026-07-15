@@ -1,5 +1,6 @@
 module;
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -16,6 +17,7 @@ module;
 export module Kairo.Assets.DerivedDataCache;
 
 import Kairo.Assets.Fingerprint;
+import Kairo.Assets.Types;
 
 export namespace kairo::assets
 {
@@ -37,11 +39,16 @@ export namespace kairo::assets
     /// Output: portable cache key. Task: ensure every byte that can change an
     /// importer result participates in cache invalidation.
     [[nodiscard]] inline DerivedDataKey MakeDerivedDataKey(const AssetFingerprint& source,
-        std::string_view importer, std::string_view importerVersion, std::string_view canonicalSettings)
+        AssetType expectedType, std::string_view importer, std::string_view importerVersion,
+        std::string_view canonicalSettings)
     {
+        const auto parsedType = ParseAssetType(NameOfAssetType(expectedType));
+        if (!parsedType || *parsedType != expectedType)
+            throw std::invalid_argument("Derived data key requires a valid asset type.");
         std::string recipe;
         recipe.reserve(80u + importer.size() + importerVersion.size() + canonicalSettings.size());
         recipe += source.ToHex(); recipe += ':'; recipe += std::to_string(source.ByteCount); recipe += '\n';
+        recipe += NameOfAssetType(expectedType); recipe += '\n';
         recipe += importer; recipe += '\n'; recipe += importerVersion; recipe += '\n'; recipe += canonicalSettings;
         const auto* bytes = reinterpret_cast<const std::byte*>(recipe.data());
         AssetFingerprint fingerprint = FingerprintBytes({ bytes, recipe.size() });
@@ -58,6 +65,8 @@ export namespace kairo::assets
     class DerivedDataCache final
     {
     public:
+        static constexpr std::size_t MaximumEntryBytes = 1024u * 1024u * 1024u + 4096u;
+
         explicit DerivedDataCache(std::filesystem::path root) : m_Root(std::move(root))
         {
             if (m_Root.empty()) throw std::invalid_argument("Derived data cache requires a root directory.");
@@ -75,7 +84,7 @@ export namespace kairo::assets
             std::error_code error;
             const std::uintmax_t size = std::filesystem::file_size(path, error);
             if (error) throw std::out_of_range("Derived cache entry does not exist: " + key.ToString());
-            if (size > 1024u * 1024u * 1024u) throw std::length_error("Derived cache entry exceeds the 1 GiB safety limit.");
+            if (size > MaximumEntryBytes) throw std::length_error("Derived cache entry exceeds its safety limit.");
             std::vector<std::byte> bytes(static_cast<std::size_t>(size));
             std::ifstream input(path, std::ios::binary);
             if (!input || (!bytes.empty() && !input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()))))
@@ -85,7 +94,15 @@ export namespace kairo::assets
 
         void Store(const DerivedDataKey& key, std::span<const std::byte> bytes) const
         {
+            if (bytes.size() > MaximumEntryBytes)
+                throw std::length_error("Derived cache entry exceeds its safety limit.");
             const std::filesystem::path target = PathFor(key);
+            if (Contains(key))
+            {
+                const std::vector<std::byte> existing = Load(key);
+                if (std::ranges::equal(existing, bytes)) return;
+                throw std::logic_error("Derived cache key already contains different bytes.");
+            }
             std::error_code error;
             std::filesystem::create_directories(target.parent_path(), error);
             if (error) throw std::runtime_error("Unable to create derived cache directory: " + error.message());
@@ -100,6 +117,9 @@ export namespace kairo::assets
             if (error)
             {
                 std::filesystem::remove(temporary);
+                // Another process may have won the same content-addressed
+                // publication race on platforms that forbid replace-by-rename.
+                if (Contains(key) && std::ranges::equal(Load(key), bytes)) return;
                 throw std::runtime_error("Unable to publish derived cache entry: " + error.message());
             }
         }
