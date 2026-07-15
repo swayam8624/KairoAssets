@@ -29,10 +29,13 @@ KairoAssets ----------------------> KairoEngineCore scene references
 - exact line/column manifest syntax errors
 - bounded parser input, asset count, path, importer, and dependency limits
 - same-directory temporary writes followed by atomic host replacement
+- deterministic SHA-256 fingerprints for in-memory and streamed source bytes
+- thread-safe source-import provenance records with current/changed/missing checks
 
-The current milestone is a complete metadata/manifest layer. Importer plugins,
-decoded-resource caching, file observation, and renderer upload are separate
-runtime services built on this contract; they are not silently simulated here.
+The current milestone includes identity, deterministic manifest persistence, and
+source-provenance invalidation. Importer plugins, decoded-resource caching,
+file observation, thumbnailing, and renderer upload are separate runtime
+services built on this contract; they are not silently simulated here.
 
 ## Build
 
@@ -119,12 +122,31 @@ exclusive locking and never expose references into internal storage. Generated
 IDs are checked and inserted under the same lock, so even an improbable random
 collision cannot race another creator.
 
+## Import Provenance
+
+`AssetFingerprint` is a SHA-256 digest plus the exact byte count. It uses
+content identity rather than timestamps, so a restored checkout or copied file
+is correctly recognized as unchanged. `FingerprintFile()` streams in fixed-size
+chunks and never loads an entire large source file into memory.
+
+`ImportDatabase` records the last successful source fingerprint, importer
+identifier/version, and canonical importer settings for registered
+`AssetOrigin::SourceFile` assets. Its `Evaluate(projectRoot, asset)` result is:
+
+- `Current` when the source content equals the recorded fingerprint
+- `Changed` when it exists but its content differs
+- `Missing` when it no longer exists as a regular file
+
+This database deliberately does not execute an importer, watch directories, or
+manage a derived-data cache. Those follow-on services consume this provenance
+contract rather than duplicating its source-change logic.
+
 ## Next Asset Milestones
 
 ```text
 A1 stable identity + typed metadata + registry       complete
 A2 deterministic validated manifest persistence      complete
-A3 importer interface + source fingerprints
+A3 source fingerprints + validated import provenance     complete
 A4 decoded resource cache + explicit lifetime policy
 A5 file observation + dependency-aware reimport
 A6 mesh/material/texture/scene importers

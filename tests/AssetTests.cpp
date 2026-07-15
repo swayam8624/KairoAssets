@@ -78,6 +78,39 @@ TEST_CASE("Asset fingerprints use portable SHA-256 content identity", "[KairoAss
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Import provenance detects source changes without owning import execution", "[KairoAssets][Import]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-import-" + GenerateAssetID().ToString());
+    const std::filesystem::path source = root / "meshes/cube.obj";
+    std::filesystem::create_directories(source.parent_path());
+    {
+        std::ofstream file(source, std::ios::binary);
+        file << "v 0 0 0\n";
+    }
+
+    AssetRegistry registry;
+    const AssetID mesh = registry.Create({ AssetType::Mesh, AssetOrigin::SourceFile,
+        "assets/cube.mesh", "kairo.obj", {} });
+    const ImportRecord record{ mesh, "meshes/cube.obj", "kairo.obj", "1.0.0",
+        "triangulate=true", FingerprintFile(source), 1u };
+    ImportDatabase imports;
+    imports.Upsert(record, registry);
+    CHECK(imports.Evaluate(root, mesh) == SourceImportState::Current);
+
+    {
+        std::ofstream file(source, std::ios::binary | std::ios::trunc);
+        file << "v 0 0 0\nv 1 0 0\n";
+    }
+    CHECK(imports.Evaluate(root, mesh) == SourceImportState::Changed);
+    std::filesystem::remove(source);
+    CHECK(imports.Evaluate(root, mesh) == SourceImportState::Missing);
+
+    REQUIRE_THROWS(imports.Upsert({ mesh, "../outside.obj", "kairo.obj", "1", "", record.SourceFingerprint, 1u }, registry));
+    REQUIRE_THROWS(imports.Upsert({ mesh, "meshes/cube.obj", "other.importer", "1", "", record.SourceFingerprint, 1u }, registry));
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
 {
     CHECK(NormalizeAssetPath("meshes/props/../cube.obj") == std::filesystem::path("meshes/cube.obj"));

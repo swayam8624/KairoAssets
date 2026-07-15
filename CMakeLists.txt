@@ -12,6 +12,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     AssetTypes.cppm
     AssetID.cppm
     AssetFingerprint.cppm
+    ImportDatabase.cppm
     AssetMetadata.cppm
     AssetRegistry.cppm
     AssetManifest.cppm
