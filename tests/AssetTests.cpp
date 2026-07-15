@@ -131,6 +131,17 @@ TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAsset
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("Derived artifacts require a stable declared format", "[KairoAssets][Artifact]")
+{
+    DerivedArtifact artifact{ AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
+    CHECK_NOTHROW(ValidateDerivedArtifact(artifact));
+    artifact.Format.clear();
+    REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
+    artifact.Format = "kairo.mesh.v1";
+    artifact.FormatVersion = 0u;
+    REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
+}
+
 TEST_CASE("Source watcher reports only deterministic provenance transitions", "[KairoAssets][Watch]")
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() /

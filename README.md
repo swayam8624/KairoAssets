@@ -171,6 +171,11 @@ provenance. `PassthroughImporter` is a working importer for opaque documents,
 scripts, and raw source artifacts. Typed mesh/material/texture importers will
 use this exact transaction rather than owning their own cache or reimport rules.
 
+`DerivedArtifact` defines the versioned output envelope for those plugins:
+declared asset type, stable format identifier, positive format version, and
+opaque payload. KairoAssets validates the envelope; runtime loaders own the
+meaning of each payload format.
+
 ## Next Asset Milestones
 
 ```text
