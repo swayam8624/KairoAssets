@@ -31,6 +31,7 @@ KairoAssets ----------------------> KairoEngineCore scene references
 - same-directory temporary writes followed by atomic host replacement
 - deterministic SHA-256 fingerprints for in-memory and streamed source bytes
 - thread-safe source-import provenance records with current/changed/missing checks
+- disk-backed content-addressed derived-data cache with byte-exact round trips
 
 The current milestone includes identity, deterministic manifest persistence, and
 source-provenance invalidation. Importer plugins, decoded-resource caching,
@@ -141,13 +142,22 @@ This database deliberately does not execute an importer, watch directories, or
 manage a derived-data cache. Those follow-on services consume this provenance
 contract rather than duplicating its source-change logic.
 
+## Derived Data Cache
+
+`DerivedDataCache` stores immutable importer artifacts under a SHA-256 key.
+`MakeDerivedDataKey()` includes the source fingerprint, importer identifier,
+importer version, and canonical settings, so changing any input cannot reuse a
+stale artifact. It provides content-addressed `Store`, `Load`, and `Contains`
+operations only; eviction policy, background importing, and file watching are
+deliberately separate orchestration concerns.
+
 ## Next Asset Milestones
 
 ```text
 A1 stable identity + typed metadata + registry       complete
 A2 deterministic validated manifest persistence      complete
 A3 source fingerprints + validated import provenance     complete
-A4 decoded resource cache + explicit lifetime policy
+A4 content-addressed derived-data cache                    complete
 A5 file observation + dependency-aware reimport
 A6 mesh/material/texture/scene importers
 A7 editor asset browser, thumbnails, drag/drop

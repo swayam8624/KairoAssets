@@ -111,6 +111,26 @@ TEST_CASE("Import provenance detects source changes without owning import execut
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAssets][Cache]")
+{
+    const std::array<std::byte, 3u> source{ std::byte{ 'a' }, std::byte{ 'b' }, std::byte{ 'c' } };
+    const AssetFingerprint fingerprint = FingerprintBytes(source);
+    const DerivedDataKey key = MakeDerivedDataKey(fingerprint, "kairo.obj", "1.0", "triangulate=true");
+    CHECK(key != MakeDerivedDataKey(fingerprint, "kairo.obj", "1.1", "triangulate=true"));
+    CHECK(key != MakeDerivedDataKey(fingerprint, "kairo.obj", "1.0", "triangulate=false"));
+
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-cache-" + GenerateAssetID().ToString());
+    DerivedDataCache cache(root);
+    CHECK_FALSE(cache.Contains(key));
+    const std::array<std::byte, 4u> artifact{ std::byte{ 1u }, std::byte{ 2u }, std::byte{ 3u }, std::byte{ 4u } };
+    cache.Store(key, artifact);
+    CHECK(cache.Contains(key));
+    CHECK(cache.Load(key) == std::vector<std::byte>(artifact.begin(), artifact.end()));
+    CHECK(DerivedDataKey::Parse(key.ToString()) == key);
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
 {
     CHECK(NormalizeAssetPath("meshes/props/../cube.obj") == std::filesystem::path("meshes/cube.obj"));
