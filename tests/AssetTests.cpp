@@ -7,6 +7,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -39,6 +40,18 @@ namespace
         [[nodiscard]] DerivedArtifact Import(const ImportRequest&) const override
         {
             return { AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
+        }
+    };
+
+    class PassthroughImporterV2 final : public AssetImporter
+    {
+    public:
+        [[nodiscard]] std::string Identifier() const override { return "kairo.passthrough"; }
+        [[nodiscard]] std::string Version() const override { return "2"; }
+        [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
+        {
+            return { request.ExpectedType, 2u, "kairo.raw.v2",
+                { request.SourceBytes.begin(), request.SourceBytes.end() } };
         }
     };
 }
@@ -272,6 +285,28 @@ TEST_CASE("Import service rejects a cached artifact with the wrong type", "[Kair
     REQUIRE_THROWS_AS(ImportSourceAsset(root, record, importer, registry, imports, cache), std::invalid_argument);
     CHECK(imports.Size() == 0u);
     std::filesystem::remove_all(root);
+}
+
+TEST_CASE("Importer registry resolves exact immutable plugin versions", "[KairoAssets][ImporterRegistry]")
+{
+    ImporterRegistry registry;
+    auto passthrough = std::make_shared<PassthroughImporter>();
+    auto passthroughV2 = std::make_shared<PassthroughImporterV2>();
+    registry.Register(passthrough);
+    registry.Register(passthroughV2);
+
+    CHECK(registry.Size() == 2u);
+    CHECK(registry.Contains(passthrough->Identifier(), passthrough->Version()));
+    CHECK(registry.Resolve(passthrough->Identifier(), passthrough->Version()) == passthrough);
+    CHECK(registry.Resolve(passthroughV2->Identifier(), passthroughV2->Version()) == passthroughV2);
+    CHECK(registry.Snapshot() == std::vector<ImporterDescriptor>{
+        { passthrough->Identifier(), passthrough->Version() },
+        { passthroughV2->Identifier(), passthroughV2->Version() } });
+
+    REQUIRE_THROWS_AS(registry.Register(passthrough), std::invalid_argument);
+    REQUIRE_THROWS_AS(registry.Register(nullptr), std::invalid_argument);
+    REQUIRE_THROWS_AS(registry.Resolve(passthrough->Identifier(), "3"), std::out_of_range);
+    REQUIRE_THROWS_AS(registry.Contains("invalid importer", "1"), std::invalid_argument);
 }
 
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")

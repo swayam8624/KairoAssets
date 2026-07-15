@@ -8,6 +8,7 @@ export import Kairo.Assets.DerivedDataCache;
 export import Kairo.Assets.DerivedArtifact;
 export import Kairo.Assets.SourceWatcher;
 export import Kairo.Assets.Importer;
+export import Kairo.Assets.ImporterRegistry;
 export import Kairo.Assets.Metadata;
 export import Kairo.Assets.Registry;
 export import Kairo.Assets.Manifest;

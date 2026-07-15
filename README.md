@@ -173,6 +173,13 @@ enter runtime loading. `PassthroughImporter` is a working typed importer for
 opaque documents, scripts, and raw source artifacts. Mesh/material/texture
 importers use this transaction rather than owning cache or reimport rules.
 
+`ImporterRegistry` owns immutable importer plugins and resolves exact
+identifier/version pairs. Multiple versions may coexist for reproducible old
+projects, duplicate identities are rejected, and snapshots are deterministic
+for diagnostics or editor presentation. It deliberately does not load dynamic
+libraries; a future signed plugin loader will publish validated instances into
+this same registry.
+
 `DerivedArtifact` defines the versioned output envelope for those plugins:
 declared asset type, stable format identifier, positive format version, and
 opaque payload. `SerializeDerivedArtifact()` writes an endian-independent
@@ -190,8 +197,9 @@ A3 source fingerprints + validated import provenance     complete
 A4 content-addressed derived-data cache                    complete
 A5 portable source observation and reimport signals         complete
 A6 executable typed importer transaction + raw importer     complete
-A7 mesh/material/texture/scene decoder plugins               next
-A8 editor asset browser, thumbnails, drag/drop
+A7 version-aware importer plugin registry                     complete
+A8 mesh/material/texture/scene decoder plugins                next
+A9 editor asset browser, thumbnails, drag/drop
 ```
 
 Runtime loaders will depend on `KairoAssets`; this repository will not depend

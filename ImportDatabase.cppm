@@ -25,6 +25,44 @@ import Kairo.Assets.Types;
 
 export namespace kairo::assets
 {
+    /// Task: keep importer identity portable across manifests, cache recipes,
+    /// plugin registries, and operating systems.
+    inline void ValidateImporterIdentifier(std::string_view identifier)
+    {
+        if (identifier.empty() || identifier.size() > 128u)
+            throw std::invalid_argument("Importer identifier must contain 1 to 128 characters.");
+        for (const char character : identifier)
+        {
+            const auto byte = static_cast<unsigned char>(character);
+            if (!std::isalnum(byte) && byte != '.' && byte != '_' && byte != '-')
+                throw std::invalid_argument("Importer identifier contains an unsupported character.");
+        }
+    }
+
+    /// Versions participate in derived-data keys and therefore use a compact,
+    /// locale-independent alphabet suitable for semantic versions and hashes.
+    inline void ValidateImporterVersion(std::string_view version)
+    {
+        if (version.empty() || version.size() > 128u)
+            throw std::invalid_argument("Importer version must contain 1 to 128 characters.");
+        for (const char character : version)
+        {
+            const auto byte = static_cast<unsigned char>(character);
+            if (!std::isalnum(byte) && byte != '.' && byte != '_' && byte != '-' && byte != '+')
+                throw std::invalid_argument("Importer version contains an unsupported character.");
+        }
+    }
+
+    /// Settings are importer-defined canonical text. NUL is forbidden because
+    /// these bytes are persisted and combined with delimiter-based cache recipes.
+    inline void ValidateCanonicalImporterSettings(std::string_view settings)
+    {
+        if (settings.size() > 64u * 1024u)
+            throw std::length_error("Import settings exceed the 64 KiB safety limit.");
+        if (settings.find('\0') != std::string_view::npos)
+            throw std::invalid_argument("Import settings cannot contain NUL bytes.");
+    }
+
     /// Persistent provenance for one imported source asset. `Source` is a
     /// project-relative input path; it is deliberately distinct from a cache
     /// path because cache layout is an A4 concern. Settings must be serialized
@@ -53,20 +91,9 @@ export namespace kairo::assets
     {
         if (!record.Asset.IsValid()) throw std::invalid_argument("Import record requires a valid asset ID.");
         (void)NormalizeAssetPath(record.Source);
-        if (record.Importer.empty() || record.Importer.size() > 128u)
-            throw std::invalid_argument("Import record importer must contain 1 to 128 characters.");
-        for (const char character : record.Importer)
-        {
-            const auto byte = static_cast<unsigned char>(character);
-            if (!std::isalnum(byte) && byte != '.' && byte != '_' && byte != '-')
-                throw std::invalid_argument("Import record importer contains an unsupported character.");
-        }
-        if (record.ImporterVersion.empty() || record.ImporterVersion.size() > 128u)
-            throw std::invalid_argument("Import record importer version must contain 1 to 128 characters.");
-        if (record.CanonicalSettings.size() > 64u * 1024u)
-            throw std::length_error("Import record settings exceed the 64 KiB safety limit.");
-        if (record.CanonicalSettings.find('\0') != std::string::npos)
-            throw std::invalid_argument("Import record settings cannot contain NUL bytes.");
+        ValidateImporterIdentifier(record.Importer);
+        ValidateImporterVersion(record.ImporterVersion);
+        ValidateCanonicalImporterSettings(record.CanonicalSettings);
         if (record.Revision == 0u) throw std::invalid_argument("Import record revision must be positive.");
 
         const AssetMetadata metadata = registry.At(record.Asset);
