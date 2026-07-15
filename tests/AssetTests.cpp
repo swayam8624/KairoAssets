@@ -153,6 +153,22 @@ TEST_CASE("Source watcher reports only deterministic provenance transitions", "[
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("Import service caches successful plugin output before recording provenance", "[KairoAssets][Importer]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / ("kairo-importer-" + GenerateAssetID().ToString());
+    std::filesystem::create_directories(root / "source");
+    { std::ofstream file(root / "source/data.txt", std::ios::binary); file << "kairo"; }
+    AssetRegistry registry;
+    const AssetID asset = registry.Create({ AssetType::Document, AssetOrigin::SourceFile, "assets/data", "kairo.passthrough", {} });
+    ImportDatabase imports; DerivedDataCache cache(root / "cache"); PassthroughImporter importer;
+    ImportRecord record{ asset, "source/data.txt", importer.Identifier(), importer.Version(), "", {}, 1u };
+    const ImportOutcome first = ImportSourceAsset(root, record, importer, registry, imports, cache);
+    CHECK_FALSE(first.CacheHit); CHECK(cache.Load(first.Key).size() == 5u); CHECK(imports.Evaluate(root, asset) == SourceImportState::Current);
+    const ImportOutcome second = ImportSourceAsset(root, imports.At(asset), importer, registry, imports, cache);
+    CHECK(second.CacheHit); CHECK(second.Key == first.Key);
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
 {
     CHECK(NormalizeAssetPath("meshes/props/../cube.obj") == std::filesystem::path("meshes/cube.obj"));

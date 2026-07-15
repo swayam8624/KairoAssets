@@ -161,6 +161,16 @@ while a source remains in the same state. Platform-native watcher adapters may
 wake polling early, but this contract remains portable for CI and headless
 tools.
 
+## Import Execution
+
+`AssetImporter` is a pure byte-to-byte plugin contract. `ImportSourceAsset()`
+owns the transaction: it validates the selected importer against registry
+metadata, reads the project-relative source, fingerprints it, builds a derived
+cache key, publishes importer output, and only then records the successful
+provenance. `PassthroughImporter` is a working importer for opaque documents,
+scripts, and raw source artifacts. Typed mesh/material/texture importers will
+use this exact transaction rather than owning their own cache or reimport rules.
+
 ## Next Asset Milestones
 
 ```text
@@ -169,7 +179,8 @@ A2 deterministic validated manifest persistence      complete
 A3 source fingerprints + validated import provenance     complete
 A4 content-addressed derived-data cache                    complete
 A5 portable source observation and reimport signals         complete
-A6 mesh/material/texture/scene importers
+A6 executable importer transaction + raw source importer    complete
+A6 typed mesh/material/texture/scene decoder plugins         next
 A7 editor asset browser, thumbnails, drag/drop
 ```
 

@@ -6,6 +6,7 @@ export import Kairo.Assets.Fingerprint;
 export import Kairo.Assets.ImportDatabase;
 export import Kairo.Assets.DerivedDataCache;
 export import Kairo.Assets.SourceWatcher;
+export import Kairo.Assets.Importer;
 export import Kairo.Assets.Metadata;
 export import Kairo.Assets.Registry;
 export import Kairo.Assets.Manifest;
