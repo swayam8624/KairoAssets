@@ -22,6 +22,7 @@ export namespace kairo::assets
         Shader,
         Audio,
         Script,
+        Document,
         Other
     };
 
@@ -44,6 +45,7 @@ export namespace kairo::assets
             case AssetType::Shader: return "shader";
             case AssetType::Audio: return "audio";
             case AssetType::Script: return "script";
+            case AssetType::Document: return "document";
             case AssetType::Other: return "other";
         }
         return "other";
@@ -58,6 +60,7 @@ export namespace kairo::assets
         if (name == "shader") return AssetType::Shader;
         if (name == "audio") return AssetType::Audio;
         if (name == "script") return AssetType::Script;
+        if (name == "document") return AssetType::Document;
         if (name == "other") return AssetType::Other;
         return std::nullopt;
     }

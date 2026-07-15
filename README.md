@@ -20,6 +20,7 @@ KairoAssets ----------------------> KairoEngineCore scene references
 - case-folded path uniqueness for cross-platform manifests
 - validated source, generated, and builtin asset origins
 - asset type, importer, revision, and dependency metadata
+- first-class `document` assets for typed graph/text authoring files
 - thread-safe identity and path lookup
 - atomic create, move, dependency update, and protected removal operations
 - dependency existence/type validation and cycle rejection

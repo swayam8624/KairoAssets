@@ -32,6 +32,7 @@ export namespace kairo::assets
     using MaterialAssetHandle = AssetHandle<AssetType::Material>;
     using TextureAssetHandle = AssetHandle<AssetType::Texture2D>;
     using SceneAssetHandle = AssetHandle<AssetType::Scene>;
+    using DocumentAssetHandle = AssetHandle<AssetType::Document>;
 
     /// Untyped reference used by dependency graphs and generic asset tooling.
     struct AssetReference final

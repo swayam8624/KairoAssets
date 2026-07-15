@@ -52,6 +52,19 @@ TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets]
     REQUIRE_THROWS(NormalizeAssetPath("."));
 }
 
+TEST_CASE("Asset categories preserve typed authoring documents", "[KairoAssets][Metadata]")
+{
+    CHECK(NameOfAssetType(AssetType::Document) == "document");
+    REQUIRE(ParseAssetType("document").has_value());
+    CHECK(*ParseAssetType("document") == AssetType::Document);
+
+    AssetRegistry registry;
+    const AssetID graph = registry.Create({ AssetType::Document, AssetOrigin::SourceFile,
+        "Logic/player-controller.kdoc", "kairo.document-v1", {} });
+    CHECK(registry.Resolve(DocumentAssetHandle{ graph }).Type == AssetType::Document);
+    REQUIRE_THROWS(registry.Resolve(SceneAssetHandle{ graph }));
+}
+
 TEST_CASE("Registry preserves typed identity and portable path uniqueness", "[KairoAssets][Registry]")
 {
     AssetRegistry registry;
