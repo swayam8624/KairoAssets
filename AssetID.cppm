@@ -70,7 +70,10 @@ export namespace kairo::assets
             return AssetID{ bytes };
         }
 
-        friend constexpr bool operator==(const AssetID&, const AssetID&) noexcept = default;
+        friend constexpr bool operator==(const AssetID& lhs, const AssetID& rhs) noexcept
+        {
+            return lhs.m_Bytes == rhs.m_Bytes;
+        }
         friend constexpr auto operator<=>(const AssetID&, const AssetID&) noexcept = default;
 
     private:
