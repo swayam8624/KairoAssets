@@ -195,6 +195,32 @@ TEST_CASE("Derived artifacts require a stable declared format", "[KairoAssets][A
     REQUIRE_THROWS_AS(ValidateDerivedArtifact(artifact), std::invalid_argument);
 }
 
+TEST_CASE("Portable binary format is endian-stable and bounds checked", "[KairoAssets][Binary]")
+{
+    BinaryWriter writer;
+    writer.WriteU8(0xabu);
+    writer.WriteU32(0x12345678u);
+    writer.WriteU64(0x0102030405060708ull);
+    writer.WriteF32(1.5f);
+    writer.WriteText("ok");
+    const std::vector<std::byte> bytes = std::move(writer).TakeBytes();
+
+    REQUIRE(bytes.size() == 19u);
+    CHECK(bytes[1u] == std::byte{ 0x78u });
+    CHECK(bytes[4u] == std::byte{ 0x12u });
+    BinaryReader reader(bytes);
+    CHECK(reader.ReadU8() == 0xabu);
+    CHECK(reader.ReadU32() == 0x12345678u);
+    CHECK(reader.ReadU64() == 0x0102030405060708ull);
+    CHECK(reader.ReadF32() == 1.5f);
+    CHECK(reader.ReadText(2u) == "ok");
+    CHECK_NOTHROW(reader.RequireEnd());
+    REQUIRE_THROWS_AS(reader.ReadU8(), std::invalid_argument);
+
+    BinaryReader trailing(bytes);
+    REQUIRE_THROWS_AS(trailing.RequireEnd(), std::invalid_argument);
+}
+
 TEST_CASE("Source watcher reports only deterministic provenance transitions", "[KairoAssets][Watch]")
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() /

@@ -188,6 +188,12 @@ opaque payload. `SerializeDerivedArtifact()` writes an endian-independent
 fields, malformed format names, and trailing bytes. Runtime loaders own the
 meaning of each validated payload format.
 
+All Kairo-owned artifact payloads use the shared `BinaryWriter` and
+`BinaryReader` contract. It writes explicit little-endian integers and IEEE-754
+32-bit floats rather than native structs or enum ordinals; every read is bounds
+checked and complete parsers call `RequireEnd()` to reject trailing data. This
+keeps mesh, texture, material, and scene formats consistent and portable.
+
 ## Next Asset Milestones
 
 ```text

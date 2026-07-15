@@ -9,13 +9,13 @@ module;
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 export module Kairo.Assets.DerivedArtifact;
 
 import Kairo.Assets.Types;
+import Kairo.Assets.BinaryFormat;
 
 export namespace kairo::assets
 {
@@ -57,36 +57,6 @@ export namespace kairo::assets
             std::byte{ 'O' }, std::byte{ 'D' }, std::byte{ 'D' }, std::byte{ '1' } };
         constexpr std::uint32_t EnvelopeVersion = 1u;
 
-        template<class Integer>
-        inline void AppendLittleEndian(std::vector<std::byte>& output, Integer value)
-        {
-            static_assert(std::is_unsigned_v<Integer>);
-            for (std::size_t index = 0u; index < sizeof(Integer); ++index)
-                output.push_back(std::byte{ static_cast<unsigned char>(value >> (index * 8u)) });
-        }
-
-        template<class Integer>
-        [[nodiscard]] inline Integer ReadLittleEndian(std::span<const std::byte> input, std::size_t& cursor)
-        {
-            static_assert(std::is_unsigned_v<Integer>);
-            if (cursor > input.size() || input.size() - cursor < sizeof(Integer))
-                throw std::invalid_argument("Derived artifact is truncated.");
-            Integer result = 0u;
-            for (std::size_t index = 0u; index < sizeof(Integer); ++index)
-                result |= static_cast<Integer>(std::to_integer<unsigned char>(input[cursor++])) << (index * 8u);
-            return result;
-        }
-
-        [[nodiscard]] inline std::string ReadText(std::span<const std::byte> input,
-            std::size_t& cursor, std::size_t length)
-        {
-            if (cursor > input.size() || length > input.size() - cursor)
-                throw std::invalid_argument("Derived artifact is truncated.");
-            std::string result(length, '\0');
-            for (std::size_t index = 0u; index < length; ++index)
-                result[index] = static_cast<char>(std::to_integer<unsigned char>(input[cursor++]));
-            return result;
-        }
     }
 
     /// Output: deterministic, endian-independent cache bytes. Asset types are
@@ -96,18 +66,17 @@ export namespace kairo::assets
         using namespace artifact_detail;
         ValidateDerivedArtifact(artifact);
         const std::string_view type = NameOfAssetType(artifact.Type);
-        std::vector<std::byte> output;
-        output.reserve(Magic.size() + 24u + type.size() + artifact.Format.size() + artifact.Payload.size());
-        output.insert(output.end(), Magic.begin(), Magic.end());
-        AppendLittleEndian(output, EnvelopeVersion);
-        AppendLittleEndian(output, static_cast<std::uint32_t>(type.size()));
-        AppendLittleEndian(output, artifact.FormatVersion);
-        AppendLittleEndian(output, static_cast<std::uint32_t>(artifact.Format.size()));
-        AppendLittleEndian(output, static_cast<std::uint64_t>(artifact.Payload.size()));
-        for (const char character : type) output.push_back(std::byte{ static_cast<unsigned char>(character) });
-        for (const char character : artifact.Format) output.push_back(std::byte{ static_cast<unsigned char>(character) });
-        output.insert(output.end(), artifact.Payload.begin(), artifact.Payload.end());
-        return output;
+        BinaryWriter output(Magic.size() + 24u + type.size() + artifact.Format.size() + artifact.Payload.size());
+        output.WriteBytes(Magic);
+        output.WriteU32(EnvelopeVersion);
+        output.WriteU32(static_cast<std::uint32_t>(type.size()));
+        output.WriteU32(artifact.FormatVersion);
+        output.WriteU32(static_cast<std::uint32_t>(artifact.Format.size()));
+        output.WriteU64(static_cast<std::uint64_t>(artifact.Payload.size()));
+        output.WriteText(type);
+        output.WriteText(artifact.Format);
+        output.WriteBytes(artifact.Payload);
+        return std::move(output).TakeBytes();
     }
 
     /// Input: one complete serialized artifact. Output: validated envelope and
@@ -115,28 +84,30 @@ export namespace kairo::assets
     [[nodiscard]] inline DerivedArtifact ParseDerivedArtifact(std::span<const std::byte> input)
     {
         using namespace artifact_detail;
-        if (input.size() < Magic.size() || !std::equal(Magic.begin(), Magic.end(), input.begin()))
+        BinaryReader reader(input);
+        if (!std::ranges::equal(reader.ReadBytes(Magic.size()), Magic))
             throw std::invalid_argument("Derived artifact magic is invalid.");
-        std::size_t cursor = Magic.size();
-        if (ReadLittleEndian<std::uint32_t>(input, cursor) != EnvelopeVersion)
+        if (reader.ReadU32() != EnvelopeVersion)
             throw std::invalid_argument("Derived artifact envelope version is unsupported.");
-        const std::uint32_t typeLength = ReadLittleEndian<std::uint32_t>(input, cursor);
-        const std::uint32_t formatVersion = ReadLittleEndian<std::uint32_t>(input, cursor);
-        const std::uint32_t formatLength = ReadLittleEndian<std::uint32_t>(input, cursor);
-        const std::uint64_t payloadLength = ReadLittleEndian<std::uint64_t>(input, cursor);
+        const std::uint32_t typeLength = reader.ReadU32();
+        const std::uint32_t formatVersion = reader.ReadU32();
+        const std::uint32_t formatLength = reader.ReadU32();
+        const std::uint64_t payloadLength = reader.ReadU64();
         if (typeLength == 0u || typeLength > 32u || formatLength == 0u || formatLength > 128u ||
             payloadLength > MaximumDerivedArtifactPayloadBytes)
             throw std::length_error("Derived artifact field exceeds its safety limit.");
-        const std::string typeName = ReadText(input, cursor, typeLength);
+        const std::string typeName = reader.ReadText(typeLength);
         const auto type = ParseAssetType(typeName);
         if (!type) throw std::invalid_argument("Derived artifact asset type is unknown.");
         DerivedArtifact result;
         result.Type = *type;
         result.FormatVersion = formatVersion;
-        result.Format = ReadText(input, cursor, formatLength);
-        if (cursor > input.size() || payloadLength != static_cast<std::uint64_t>(input.size() - cursor))
+        result.Format = reader.ReadText(formatLength);
+        if (payloadLength != static_cast<std::uint64_t>(reader.Remaining()))
             throw std::invalid_argument("Derived artifact payload length does not match the complete input.");
-        result.Payload.assign(input.begin() + static_cast<std::ptrdiff_t>(cursor), input.end());
+        const auto payload = reader.ReadBytes(static_cast<std::size_t>(payloadLength));
+        result.Payload.assign(payload.begin(), payload.end());
+        reader.RequireEnd();
         ValidateDerivedArtifact(result);
         return result;
     }
