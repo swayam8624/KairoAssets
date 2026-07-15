@@ -74,7 +74,22 @@ export namespace kairo::assets
         {
             return lhs.m_Bytes == rhs.m_Bytes;
         }
-        friend constexpr auto operator<=>(const AssetID&, const AssetID&) noexcept = default;
+
+        /// Provides a lexicographic, byte-stable order for ordered registries
+        /// and deterministic manifest output. The comparison is deliberately
+        /// explicit instead of defaulted: some C++ module implementations do
+        /// not expose std::array's synthesized three-way comparison reliably
+        /// across an imported standard-library boundary.
+        friend constexpr std::strong_ordering operator<=>(const AssetID& lhs,
+            const AssetID& rhs) noexcept
+        {
+            for (std::size_t index = 0u; index < lhs.m_Bytes.size(); ++index)
+            {
+                if (lhs.m_Bytes[index] < rhs.m_Bytes[index]) return std::strong_ordering::less;
+                if (lhs.m_Bytes[index] > rhs.m_Bytes[index]) return std::strong_ordering::greater;
+            }
+            return std::strong_ordering::equal;
+        }
 
     private:
         Storage m_Bytes{};

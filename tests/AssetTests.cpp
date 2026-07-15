@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -40,6 +41,14 @@ TEST_CASE("Asset IDs round-trip canonical UUID text", "[KairoAssets][Identity]")
     CHECK(generated.IsValid());
     CHECK((generated.Bytes()[6] & 0xf0u) == 0x40u);
     CHECK((generated.Bytes()[8] & 0xc0u) == 0x80u);
+
+    // Ordered containers use AssetID's canonical byte ordering. This is part
+    // of deterministic asset and document serialization, not presentation.
+    const AssetID lower = AssetID::Parse("00000000-0000-4000-8000-000000000001");
+    const AssetID higher = AssetID::Parse("00000000-0000-4000-8000-000000000002");
+    CHECK((lower <=> higher) == std::strong_ordering::less);
+    std::map<AssetID, int> ordered{ { higher, 2 }, { lower, 1 } };
+    REQUIRE(ordered.begin()->first == lower);
 }
 
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
