@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -8,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <span>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -49,6 +52,30 @@ TEST_CASE("Asset IDs round-trip canonical UUID text", "[KairoAssets][Identity]")
     CHECK((lower <=> higher) == std::strong_ordering::less);
     std::map<AssetID, int> ordered{ { higher, 2 }, { lower, 1 } };
     REQUIRE(ordered.begin()->first == lower);
+}
+
+TEST_CASE("Asset fingerprints use portable SHA-256 content identity", "[KairoAssets][Fingerprint]")
+{
+    const std::array<std::byte, 0u> empty{};
+    const AssetFingerprint emptyFingerprint = FingerprintBytes(empty);
+    CHECK(emptyFingerprint.ByteCount == 0u);
+    CHECK(emptyFingerprint.ToHex() == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+
+    const std::array<std::byte, 3u> abc{ std::byte{ 'a' }, std::byte{ 'b' }, std::byte{ 'c' } };
+    const AssetFingerprint abcFingerprint = FingerprintBytes(abc);
+    CHECK(abcFingerprint.ByteCount == 3u);
+    CHECK(abcFingerprint.ToHex() == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    CHECK(AssetFingerprint::Parse(abcFingerprint.ToHex(), 3u) == abcFingerprint);
+    REQUIRE_THROWS_AS(AssetFingerprint::Parse("not-a-sha256", 0u), std::invalid_argument);
+
+    const auto path = std::filesystem::temp_directory_path() /
+        ("kairo-fingerprint-" + GenerateAssetID().ToString());
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << "abc";
+    }
+    CHECK(FingerprintFile(path) == abcFingerprint);
+    std::filesystem::remove(path);
 }
 
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
