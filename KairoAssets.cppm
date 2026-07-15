@@ -11,6 +11,7 @@ export import Kairo.Assets.MeshArtifact;
 export import Kairo.Assets.SourceWatcher;
 export import Kairo.Assets.Importer;
 export import Kairo.Assets.ImporterRegistry;
+export import Kairo.Assets.OBJImporter;
 export import Kairo.Assets.Metadata;
 export import Kairo.Assets.Registry;
 export import Kairo.Assets.Manifest;

@@ -202,6 +202,14 @@ degenerate triangles, count/size overflow, corrupted bounds, and trailing data.
 Both KairoRenderer and KairoRayTracer can consume `kairo.mesh.v1` without
 depending on each other's CPU or GPU types.
 
+`OBJMeshImporter` is the first production source decoder. It handles 1-based
+and relative indices, all standard face vertex forms, normalized source
+normals, smoothing groups, area-weighted generated normals, homogeneous
+positions, UVs, tuple deduplication, and ear-clipped planar concave polygons.
+Diagnostics carry exact line/column locations. Material partitions, lines, and
+points fail explicitly because mesh artifact v1 cannot preserve those semantics;
+the importer never silently discards authored render data.
+
 ## Next Asset Milestones
 
 ```text
@@ -212,8 +220,9 @@ A4 content-addressed derived-data cache                    complete
 A5 portable source observation and reimport signals         complete
 A6 executable typed importer transaction + raw importer     complete
 A7 version-aware importer plugin registry                     complete
-A8 mesh/material/texture/scene decoder plugins                next
-A9 editor asset browser, thumbnails, drag/drop
+A8 portable mesh artifact + strict OBJ geometry importer       complete
+A9 glTF/material/texture/scene decoder plugins                  next
+A10 editor asset browser, thumbnails, drag/drop
 ```
 
 Runtime loaders will depend on `KairoAssets`; this repository will not depend

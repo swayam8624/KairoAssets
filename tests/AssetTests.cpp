@@ -366,6 +366,79 @@ TEST_CASE("Importer registry resolves exact immutable plugin versions", "[KairoA
     REQUIRE_THROWS_AS(registry.Contains("invalid importer", "1"), std::invalid_argument);
 }
 
+TEST_CASE("OBJ importer triangulates polygons and generates smooth normals", "[KairoAssets][OBJ]")
+{
+    const std::string source =
+        "v 0 0 0\n"
+        "v 2 0 0\n"
+        "v 2 2 0\n"
+        "v 1 1 0\n"
+        "v 0 2 0\n"
+        "vt 0 0\n"
+        "vt 1 0\n"
+        "vt 1 1\n"
+        "vt 0.5 0.5\n"
+        "vt 0 1\n"
+        "s 1\n"
+        "f -5/-5 -4/-4 -3/-3 -2/-2 -1/-1\n";
+    const auto bytes = std::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(source.data()), source.size());
+    const MeshArtifactData mesh = ParseOBJMesh(bytes);
+    CHECK(mesh.Vertices.size() == 5u);
+    CHECK(mesh.Indices.size() == 9u);
+    CHECK(mesh.HasNormals);
+    CHECK(mesh.HasTexCoords);
+    for (const MeshArtifactVertex& vertex : mesh.Vertices)
+        CHECK(vertex.Normal == std::array<float, 3u>{ 0.0f, 0.0f, 1.0f });
+    CHECK(ParseMeshDerivedArtifact(OBJMeshImporter{}.Import({ {}, AssetType::Mesh, bytes })) == mesh);
+}
+
+TEST_CASE("OBJ importer reports source locations and refuses lossy material import", "[KairoAssets][OBJ]")
+{
+    const auto parse = [](std::string_view source)
+    {
+        return ParseOBJMesh({ reinterpret_cast<const std::byte*>(source.data()), source.size() });
+    };
+    try
+    {
+        (void)parse("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 0 2 3\n");
+        FAIL("Expected invalid zero OBJ index.");
+    }
+    catch (const OBJImportError& error)
+    {
+        CHECK(error.Line == 4u);
+        CHECK(error.Column == 3u);
+    }
+    REQUIRE_THROWS_AS(parse("mtllib scene.mtl\n"), OBJImportError);
+    REQUIRE_THROWS_AS(parse("v 0 0 0\nv 1 0 0\nv 2 0 0\nf 1 2 3\n"), OBJImportError);
+}
+
+TEST_CASE("OBJ importer publishes a typed cache artifact through the registry", "[KairoAssets][OBJ][Importer]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-obj-import-" + GenerateAssetID().ToString());
+    std::filesystem::create_directories(root / "source");
+    {
+        std::ofstream source(root / "source/triangle.obj", std::ios::binary);
+        source << "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    }
+    AssetRegistry assets;
+    ImporterRegistry plugins;
+    auto obj = std::make_shared<OBJMeshImporter>();
+    plugins.Register(obj);
+    const AssetID meshID = assets.Create({ AssetType::Mesh, AssetOrigin::SourceFile,
+        "meshes/triangle", obj->Identifier(), {} });
+    ImportDatabase imports;
+    DerivedDataCache cache(root / "cache");
+    const ImportRecord record{ meshID, "source/triangle.obj", obj->Identifier(), obj->Version(), "", {}, 1u };
+    const auto selected = plugins.Resolve(record.Importer, record.ImporterVersion);
+    const ImportOutcome outcome = ImportSourceAsset(root, record, *selected, assets, imports, cache);
+    CHECK_FALSE(outcome.CacheHit);
+    CHECK(ParseMeshDerivedArtifact(outcome.Artifact).Indices == std::vector<std::uint32_t>{ 0u, 1u, 2u });
+    CHECK(ParseMeshDerivedArtifact(ParseDerivedArtifact(cache.Load(outcome.Key))).Vertices.size() == 3u);
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
 {
     CHECK(NormalizeAssetPath("meshes/props/../cube.obj") == std::filesystem::path("meshes/cube.obj"));
