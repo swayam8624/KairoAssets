@@ -131,6 +131,28 @@ TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAsset
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("Source watcher reports only deterministic provenance transitions", "[KairoAssets][Watch]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-watch-" + GenerateAssetID().ToString());
+    const std::filesystem::path source = root / "source/mesh.obj";
+    std::filesystem::create_directories(source.parent_path());
+    { std::ofstream file(source, std::ios::binary); file << "one"; }
+    AssetRegistry registry;
+    const AssetID asset = registry.Create({ AssetType::Mesh, AssetOrigin::SourceFile, "assets/mesh", "kairo.obj", {} });
+    ImportDatabase imports;
+    imports.Upsert({ asset, "source/mesh.obj", "kairo.obj", "1", "", FingerprintFile(source), 1u }, registry);
+    SourceWatcher watcher(root);
+    watcher.Synchronize(imports);
+    CHECK(watcher.Poll(imports).empty());
+    { std::ofstream file(source, std::ios::binary | std::ios::trunc); file << "two"; }
+    REQUIRE(watcher.Poll(imports) == std::vector<SourceChange>{ { asset, SourceImportState::Current, SourceImportState::Changed } });
+    CHECK(watcher.Poll(imports).empty());
+    std::filesystem::remove(source);
+    REQUIRE(watcher.Poll(imports) == std::vector<SourceChange>{ { asset, SourceImportState::Changed, SourceImportState::Missing } });
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets][Metadata]")
 {
     CHECK(NormalizeAssetPath("meshes/props/../cube.obj") == std::filesystem::path("meshes/cube.obj"));

@@ -151,6 +151,16 @@ stale artifact. It provides content-addressed `Store`, `Load`, and `Contains`
 operations only; eviction policy, background importing, and file watching are
 deliberately separate orchestration concerns.
 
+## Source Observation
+
+`SourceWatcher` is a deterministic polling baseline over `ImportDatabase`.
+After `Synchronize()`, `Poll()` emits only state transitions in asset-ID order:
+source content changes, disappearance, and a subsequent restored/current state
+after provenance is updated. It emits no startup noise and no repeated event
+while a source remains in the same state. Platform-native watcher adapters may
+wake polling early, but this contract remains portable for CI and headless
+tools.
+
 ## Next Asset Milestones
 
 ```text
@@ -158,7 +168,7 @@ A1 stable identity + typed metadata + registry       complete
 A2 deterministic validated manifest persistence      complete
 A3 source fingerprints + validated import provenance     complete
 A4 content-addressed derived-data cache                    complete
-A5 file observation + dependency-aware reimport
+A5 portable source observation and reimport signals         complete
 A6 mesh/material/texture/scene importers
 A7 editor asset browser, thumbnails, drag/drop
 ```

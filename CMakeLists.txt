@@ -14,6 +14,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     AssetFingerprint.cppm
     ImportDatabase.cppm
     DerivedDataCache.cppm
+    SourceWatcher.cppm
     AssetMetadata.cppm
     AssetRegistry.cppm
     AssetManifest.cppm
