@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -126,4 +127,72 @@ TEST_CASE("Registry creates assets safely from concurrent workers", "[KairoAsset
     workers.clear();
     CHECK_FALSE(failed.load());
     CHECK(registry.Size() == 24u);
+}
+
+TEST_CASE("Asset manifests round-trip deterministically with arbitrary dependency order", "[KairoAssets][Manifest]")
+{
+    const AssetID texture = FixedID("000000000001");
+    const AssetID material = FixedID("000000000002");
+    const std::string source =
+        "kairo-assets 1\n"
+        "asset " + material.ToString() + " material source 4 \"materials/brick \\\"red\\\".kmat\" \"kairo.material-v1\"\n"
+        "dependency " + texture.ToString() + " texture2d\n"
+        "end\n"
+        "asset " + texture.ToString() + " texture2d source 2 \"textures/brick.png\" \"kairo.image\"\n"
+        "end\n";
+
+    AssetRegistry registry;
+    registry.ReplaceAll(ParseAssetManifest(source));
+    REQUIRE(registry.Size() == 2u);
+    CHECK(registry.At(material).Dependencies.front().ID == texture);
+    CHECK(registry.At(material).Path == "materials/brick \"red\".kmat");
+    CHECK(registry.At(material).Importer == "kairo.material-v1");
+
+    const std::string serialized = SerializeAssetManifest(registry);
+    AssetRegistry restored;
+    restored.ReplaceAll(ParseAssetManifest(serialized));
+    CHECK(SerializeAssetManifest(restored) == serialized);
+}
+
+TEST_CASE("Asset manifest syntax errors preserve exact source location", "[KairoAssets][Manifest]")
+{
+    try
+    {
+        (void)ParseAssetManifest("kairo-assets 1\nasset broken\n");
+        FAIL("Malformed manifest should throw");
+    }
+    catch (const AssetManifestError& error)
+    {
+        CHECK(error.Line == 2u);
+        CHECK(error.Column == 1u);
+        CHECK(std::string(error.what()).find("2:1") != std::string::npos);
+    }
+
+    REQUIRE_THROWS_AS(ParseAssetManifest(
+        "kairo-assets 1\nasset 00000000-0000-4000-8000-000000000001 mesh source 1 \"unterminated\n"),
+        AssetManifestError);
+}
+
+TEST_CASE("Asset manifest files replace and reload registry state", "[KairoAssets][Manifest][IO]")
+{
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() /
+        ("kairo-assets-test-" + GenerateAssetID().ToString());
+    const std::filesystem::path manifest = directory / "project.kassets";
+    AssetRegistry source;
+    const AssetID mesh = source.Create({ AssetType::Mesh, AssetOrigin::Builtin,
+        "builtin/cube", "kairo.builtin", {} });
+
+    SaveAssetManifest(manifest, source);
+    REQUIRE(std::filesystem::exists(manifest));
+    AssetRegistry loaded;
+    LoadAssetManifest(manifest, loaded);
+    CHECK(loaded.Resolve(MeshAssetHandle{ mesh }).Path == "builtin/cube");
+
+    {
+        std::ofstream corrupt(manifest, std::ios::trunc);
+        corrupt << "not-a-manifest\n";
+    }
+    REQUIRE_THROWS(LoadAssetManifest(manifest, loaded));
+    CHECK(loaded.Contains(mesh));
+    std::filesystem::remove_all(directory);
 }

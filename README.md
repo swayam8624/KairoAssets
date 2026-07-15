@@ -1,0 +1,135 @@
+# KairoAssets
+
+`KairoAssets` is Kairo's backend-neutral asset identity, metadata registry, and
+project manifest layer. It solves the persistent-reference problem between
+authoring tools and runtime systems without owning Vulkan objects, decoded mesh
+bytes, audio devices, scene ECS storage, or platform file watchers.
+
+```text
+KairoAssets ----------------------> KairoEngineCore scene references
+     |                                      |
+     +--> importer/runtime cache later      +--> Renderer/Physics adapters
+```
+
+## Current Surface
+
+- random RFC 4122 version-4 128-bit `AssetID` values
+- canonical lowercase UUID parsing and formatting
+- compile-time typed mesh, material, texture, and scene handles
+- portable project-relative path normalization
+- case-folded path uniqueness for cross-platform manifests
+- validated source, generated, and builtin asset origins
+- asset type, importer, revision, and dependency metadata
+- thread-safe identity and path lookup
+- atomic create, move, dependency update, and protected removal operations
+- dependency existence/type validation and cycle rejection
+- strong-exception-guarantee bulk manifest replacement
+- deterministic ID-sorted snapshots and manifests
+- exact line/column manifest syntax errors
+- bounded parser input, asset count, path, importer, and dependency limits
+- same-directory temporary writes followed by atomic host replacement
+
+The current milestone is a complete metadata/manifest layer. Importer plugins,
+decoded-resource caching, file observation, and renderer upload are separate
+runtime services built on this contract; they are not silently simulated here.
+
+## Build
+
+```bash
+cd /Users/swayamsingal/Desktop/Programming/Kairo/KairoAssets
+cmake -S . -B build -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Use the umbrella module:
+
+```cpp
+import Kairo.Assets;
+
+using namespace kairo::assets;
+
+AssetRegistry assets;
+const AssetID cube = assets.Create({
+    AssetType::Mesh,
+    AssetOrigin::Builtin,
+    "builtin/cube",
+    "kairo.builtin",
+    {}
+});
+
+const AssetMetadata metadata = assets.Resolve(MeshAssetHandle{ cube });
+SaveAssetManifest("Project/Assets.kassets", assets);
+```
+
+## Identity And Paths
+
+An `AssetID` identifies authored content independently from its path. Moving
+`meshes/props/chair.obj` to `environment/furniture/chair.obj` changes metadata
+and increments its revision but leaves every scene reference intact.
+
+Paths are logical project paths, not process-working-directory paths. They must
+be relative, cannot contain parent traversal, roots, drive prefixes, colons,
+backslashes, or control bytes, and are indexed case-insensitively. This rejects
+a project containing both `Textures/Brick.png` and `textures/brick.png` before
+it becomes ambiguous on a case-insensitive filesystem.
+
+Importer identifiers contain 1 to 128 ASCII alphanumeric, `.`, `_`, or `-`
+characters. They identify the importer implementation and version policy, not a
+shared-library filename.
+
+## Dependency Rules
+
+Dependencies carry both identity and expected type. Registry mutation rejects:
+
+- missing targets
+- type mismatches
+- self references
+- duplicate dependencies
+- direct or transitive cycles
+- removal of an asset that still has dependents
+
+Callers must explicitly redirect or remove dependents before deleting a shared
+texture, material, mesh, or scene. There is no implicit cascade deletion.
+
+## Manifest Format
+
+The deterministic text format is intended for source control:
+
+```text
+kairo-assets 1
+asset 00000000-0000-4000-8000-000000000001 texture2d source 2 "textures/brick.png" "kairo.image"
+end
+asset 00000000-0000-4000-8000-000000000002 material source 4 "materials/brick.kmat" "kairo.material-v1"
+dependency 00000000-0000-4000-8000-000000000001 texture2d
+end
+```
+
+Blank lines and `#` comments are accepted. Quoted values support `\\`, `\"`,
+`\n`, and `\t`. Records may appear in any order because loading validates the
+complete dependency graph before replacing live registry state. A parse or
+graph error leaves the existing registry unchanged.
+
+## Threading Contract
+
+Registry reads use shared locking and return metadata copies. Mutations use
+exclusive locking and never expose references into internal storage. Generated
+IDs are checked and inserted under the same lock, so even an improbable random
+collision cannot race another creator.
+
+## Next Asset Milestones
+
+```text
+A1 stable identity + typed metadata + registry       complete
+A2 deterministic validated manifest persistence      complete
+A3 importer interface + source fingerprints
+A4 decoded resource cache + explicit lifetime policy
+A5 file observation + dependency-aware reimport
+A6 mesh/material/texture/scene importers
+A7 editor asset browser, thumbnails, drag/drop
+```
+
+Runtime loaders will depend on `KairoAssets`; this repository will not depend
+on KairoRenderer or KairoEngineCore. That direction keeps headless builds,
+import workers, tests, and command-line project tools usable without a GPU.

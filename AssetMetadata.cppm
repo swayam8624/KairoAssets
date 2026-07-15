@@ -110,7 +110,14 @@ export namespace kairo::assets
     {
         if (!metadata.ID.IsValid()) throw std::invalid_argument("Asset metadata requires a valid ID.");
         (void)NormalizeAssetPath(metadata.Path);
-        if (metadata.Importer.empty()) throw std::invalid_argument("Asset metadata requires a non-empty importer identifier.");
+        if (metadata.Importer.empty() || metadata.Importer.size() > 128u)
+            throw std::invalid_argument("Asset importer identifier must contain 1 to 128 characters.");
+        for (const char character : metadata.Importer)
+        {
+            const auto byte = static_cast<unsigned char>(character);
+            if (!std::isalnum(byte) && byte != '.' && byte != '_' && byte != '-')
+                throw std::invalid_argument("Asset importer identifier contains an unsupported character.");
+        }
         if (metadata.Revision == 0u) throw std::invalid_argument("Asset metadata revision must be positive.");
 
         std::unordered_set<AssetID, AssetIDHash> unique;

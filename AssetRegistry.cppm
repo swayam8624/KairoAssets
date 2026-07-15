@@ -77,6 +77,35 @@ export namespace kairo::assets
             m_Assets.emplace(metadata.ID, std::move(metadata));
         }
 
+        /// Input: a complete manifest snapshot in arbitrary record order.
+        /// Task: validate IDs, paths, dependency targets/types, and the full
+        /// graph before replacing live state. Failure leaves this registry
+        /// unchanged, providing the strong exception guarantee required by
+        /// project reload and editor recovery workflows.
+        void ReplaceAll(std::vector<AssetMetadata> records)
+        {
+            AssetMap candidateAssets;
+            std::unordered_map<std::string, AssetID> candidatePaths;
+            candidateAssets.reserve(records.size());
+            candidatePaths.reserve(records.size());
+            for (AssetMetadata& metadata : records)
+            {
+                metadata.Path = NormalizeAssetPath(metadata.Path);
+                ValidateAssetMetadata(metadata);
+                const std::string key = PortableAssetPathKey(metadata.Path);
+                if (!candidatePaths.emplace(key, metadata.ID).second)
+                    throw std::invalid_argument("Asset manifest contains duplicate portable paths.");
+                if (!candidateAssets.emplace(metadata.ID, std::move(metadata)).second)
+                    throw std::invalid_argument("Asset manifest contains duplicate IDs.");
+            }
+            for (const auto& [id, metadata] : candidateAssets)
+                ValidateDependencies(metadata, candidateAssets);
+
+            std::unique_lock lock(m_Mutex);
+            m_Assets.swap(candidateAssets);
+            m_Paths.swap(candidatePaths);
+        }
+
         [[nodiscard]] bool Contains(AssetID id) const
         {
             std::shared_lock lock(m_Mutex);

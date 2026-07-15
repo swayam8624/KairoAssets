@@ -4,3 +4,4 @@ export import Kairo.Assets.Types;
 export import Kairo.Assets.AssetID;
 export import Kairo.Assets.Metadata;
 export import Kairo.Assets.Registry;
+export import Kairo.Assets.Manifest;

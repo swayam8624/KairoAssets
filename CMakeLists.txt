@@ -13,6 +13,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     AssetID.cppm
     AssetMetadata.cppm
     AssetRegistry.cppm
+    AssetManifest.cppm
     KairoAssets.cppm)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(KairoAssets PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
