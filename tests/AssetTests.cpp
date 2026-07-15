@@ -221,6 +221,37 @@ TEST_CASE("Portable binary format is endian-stable and bounds checked", "[KairoA
     REQUIRE_THROWS_AS(trailing.RequireEnd(), std::invalid_argument);
 }
 
+TEST_CASE("Mesh artifacts round-trip portable indexed geometry", "[KairoAssets][Mesh]")
+{
+    MeshArtifactData mesh{
+        {
+            { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } },
+            { { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+            { { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } }
+        },
+        { 0u, 1u, 2u }, true, true
+    };
+    CHECK_NOTHROW(ValidateMeshArtifactData(mesh));
+    CHECK(ComputeMeshArtifactBounds(mesh) == MeshArtifactBounds{
+        { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } });
+    const DerivedArtifact artifact = MakeMeshDerivedArtifact(mesh);
+    CHECK(ParseMeshDerivedArtifact(artifact) == mesh);
+    CHECK(ParseMeshArtifactData(SerializeMeshArtifactData(mesh)) == mesh);
+
+    std::vector<std::byte> corrupt = artifact.Payload;
+    corrupt.push_back(std::byte{ 0u });
+    REQUIRE_THROWS_AS(ParseMeshArtifactData(corrupt), std::invalid_argument);
+    corrupt = artifact.Payload;
+    corrupt[24u] = std::byte{ 1u };
+    REQUIRE_THROWS_AS(ParseMeshArtifactData(corrupt), std::invalid_argument);
+
+    mesh.Indices[2u] = 9u;
+    REQUIRE_THROWS_AS(ValidateMeshArtifactData(mesh), std::out_of_range);
+    mesh.Indices[2u] = 2u;
+    mesh.Vertices[0].Normal = { 0.0f, 0.0f, 2.0f };
+    REQUIRE_THROWS_AS(ValidateMeshArtifactData(mesh), std::invalid_argument);
+}
+
 TEST_CASE("Source watcher reports only deterministic provenance transitions", "[KairoAssets][Watch]")
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() /

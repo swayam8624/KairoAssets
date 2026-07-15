@@ -194,6 +194,14 @@ All Kairo-owned artifact payloads use the shared `BinaryWriter` and
 checked and complete parsers call `RequireEnd()` to reject trailing data. This
 keeps mesh, texture, material, and scene formats consistent and portable.
 
+`MeshArtifactData` is the first concrete runtime-neutral payload: indexed
+counter-clockwise triangles with object-local positions, optional normalized
+vertex normals and UVs, and persisted bounds. Validation rejects non-finite
+channels, invalid indices, non-unit normals, non-canonical absent channels,
+degenerate triangles, count/size overflow, corrupted bounds, and trailing data.
+Both KairoRenderer and KairoRayTracer can consume `kairo.mesh.v1` without
+depending on each other's CPU or GPU types.
+
 ## Next Asset Milestones
 
 ```text

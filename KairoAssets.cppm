@@ -7,6 +7,7 @@ export import Kairo.Assets.ImportDatabase;
 export import Kairo.Assets.DerivedDataCache;
 export import Kairo.Assets.BinaryFormat;
 export import Kairo.Assets.DerivedArtifact;
+export import Kairo.Assets.MeshArtifact;
 export import Kairo.Assets.SourceWatcher;
 export import Kairo.Assets.Importer;
 export import Kairo.Assets.ImporterRegistry;

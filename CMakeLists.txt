@@ -16,6 +16,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     DerivedDataCache.cppm
     BinaryFormat.cppm
     DerivedArtifact.cppm
+    MeshArtifact.cppm
     SourceWatcher.cppm
     Importer.cppm
     ImporterRegistry.cppm
