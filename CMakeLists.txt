@@ -11,6 +11,7 @@ add_library(KairoAssets)
 target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES
     AssetTypes.cppm
     AssetID.cppm
+    AtomicFile.cppm
     AssetFingerprint.cppm
     ImportDatabase.cppm
     DerivedDataCache.cppm

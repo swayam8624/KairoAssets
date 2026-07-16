@@ -21,6 +21,7 @@ module;
 export module Kairo.Assets.Manifest;
 
 import Kairo.Assets.AssetID;
+import Kairo.Assets.AtomicFile;
 import Kairo.Assets.Metadata;
 import Kairo.Assets.Registry;
 import Kairo.Assets.Types;
@@ -300,8 +301,7 @@ export namespace kairo::assets
             output.flush();
             if (!output) throw std::runtime_error("Cannot write complete temporary asset manifest.");
             output.close();
-            if (std::rename(temporary.string().c_str(), path.string().c_str()) != 0)
-                throw std::runtime_error("Cannot atomically replace asset manifest.");
+            ReplaceFileAtomically(temporary, path);
         }
         catch (...)
         {

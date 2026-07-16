@@ -2,6 +2,7 @@ export module Kairo.Assets;
 
 export import Kairo.Assets.Types;
 export import Kairo.Assets.AssetID;
+export import Kairo.Assets.AtomicFile;
 export import Kairo.Assets.Fingerprint;
 export import Kairo.Assets.ImportDatabase;
 export import Kairo.Assets.DerivedDataCache;

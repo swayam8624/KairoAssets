@@ -78,7 +78,10 @@ export namespace kairo::assets
         if (input.empty() || input.is_absolute() || input.has_root_name() || input.has_root_directory())
             throw std::invalid_argument("Asset path must be non-empty and project-relative.");
 
-        const std::string original = input.generic_string();
+        // Read the native spelling before filesystem normalization. On Windows,
+        // generic_string() converts '\\' to '/', which would hide a path that
+        // the portable asset format intentionally rejects.
+        const std::string original = input.string();
         for (const char character : original)
         {
             const auto byte = static_cast<unsigned char>(character);
