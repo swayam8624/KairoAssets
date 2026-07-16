@@ -445,7 +445,11 @@ TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets]
     CHECK(PortableAssetPathKey("Textures/Brick.PNG") == "textures/brick.png");
     REQUIRE_THROWS(NormalizeAssetPath("../outside.mesh"));
     REQUIRE_THROWS(NormalizeAssetPath("C:/absolute.mesh"));
+#if defined(_WIN32)
+    CHECK(NormalizeAssetPath("folder\\windows.mesh") == std::filesystem::path("folder/windows.mesh"));
+#else
     REQUIRE_THROWS(NormalizeAssetPath("folder\\windows.mesh"));
+#endif
     REQUIRE_THROWS(NormalizeAssetPath("."));
 }
 

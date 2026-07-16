@@ -78,14 +78,20 @@ export namespace kairo::assets
         if (input.empty() || input.is_absolute() || input.has_root_name() || input.has_root_directory())
             throw std::invalid_argument("Asset path must be non-empty and project-relative.");
 
-        // Read the native spelling before filesystem normalization. On Windows,
-        // generic_string() converts '\\' to '/', which would hide a path that
-        // the portable asset format intentionally rejects.
-        const std::string original = input.string();
+        // generic_string() gives the logical slash spelling on Windows. A path
+        // constructed from a project descriptor is already interpreted by the
+        // host filesystem, so its native spelling may contain '\\' even when
+        // the authored manifest used '/'. Validate the portable representation
+        // instead of rejecting every valid Windows project path.
+        const std::string original = input.generic_string();
         for (const char character : original)
         {
             const auto byte = static_cast<unsigned char>(character);
-            if (byte == '\\' || byte == ':' || byte < 0x20u || byte == 0x7fu)
+            bool nonPortable = byte == ':' || byte < 0x20u || byte == 0x7fu;
+#if !defined(_WIN32)
+            nonPortable = nonPortable || byte == '\\';
+#endif
+            if (nonPortable)
                 throw std::invalid_argument("Asset path contains a non-portable character.");
         }
 
