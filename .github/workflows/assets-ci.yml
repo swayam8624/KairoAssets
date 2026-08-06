@@ -41,14 +41,51 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          set +e
           if [[ "${{ matrix.compiler }}" == "clang" ]]; then
             export CC=clang
             export CXX=clang++
           fi
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DKAIRO_ASSETS_BUILD_TESTS=ON
+            -DKAIRO_ASSETS_BUILD_TESTS=ON 2>&1 | tee configure.log
+          status=${PIPESTATUS[0]}
+          if [[ $status -ne 0 ]]; then
+            {
+              echo '## Configure failure'
+              echo '```text'
+              tail -n 160 configure.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
       - name: Build
-        run: cmake --build build --parallel
+        shell: bash
+        run: |
+          set +e
+          cmake --build build --parallel 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [[ $status -ne 0 ]]; then
+            {
+              echo '## Build failure'
+              echo '```text'
+              tail -n 240 build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        shell: bash
+        run: |
+          set +e
+          ctest --test-dir build --output-on-failure 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [[ $status -ne 0 ]]; then
+            {
+              echo '## Test failure'
+              echo '```text'
+              tail -n 240 test.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
