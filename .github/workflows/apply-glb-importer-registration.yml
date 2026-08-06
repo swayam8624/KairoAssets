@@ -1,0 +1,82 @@
+name: Apply GLB Importer Registration
+
+on:
+  push:
+    branches:
+      - agent/phase2-static-gltf
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Register GLB importer
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          cmake = Path('CMakeLists.txt')
+          text = cmake.read_text()
+          dependency = '''
+          if(NOT TARGET nlohmann_json::nlohmann_json)
+              include(FetchContent)
+              FetchContent_Declare(nlohmann_json
+                  GIT_REPOSITORY https://github.com/nlohmann/json.git
+                  GIT_TAG v3.11.3
+                  GIT_SHALLOW TRUE)
+              FetchContent_MakeAvailable(nlohmann_json)
+          endif()
+
+          '''
+          marker = 'option(KAIRO_ASSETS_BUILD_TESTS "Build KairoAssets tests" ${PROJECT_IS_TOP_LEVEL})\n\n'
+          if 'FetchContent_Declare(nlohmann_json' not in text:
+              if marker not in text:
+                  raise SystemExit('dependency marker not found')
+              text = text.replace(marker, marker + dependency, 1)
+          module_marker = '    OBJImporter.cppm\n'
+          if '    GLBImporter.cppm\n' not in text:
+              if module_marker not in text:
+                  raise SystemExit('module marker not found')
+              text = text.replace(module_marker, module_marker + '    GLBImporter.cppm\n', 1)
+          library_marker = 'if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")'
+          link_line = 'target_link_libraries(KairoAssets PRIVATE nlohmann_json::nlohmann_json)\n'
+          if link_line not in text:
+              if library_marker not in text:
+                  raise SystemExit('library marker not found')
+              text = text.replace(library_marker, link_line + library_marker, 1)
+          test_marker = 'add_executable(KairoAssetsTests tests/AssetTests.cpp)'
+          test_line = 'add_executable(KairoAssetsTests tests/AssetTests.cpp tests/GLBImporterTests.cpp)'
+          if test_line not in text:
+              if test_marker not in text:
+                  raise SystemExit('test target marker not found')
+              text = text.replace(test_marker, test_line, 1)
+          test_link = 'target_link_libraries(KairoAssetsTests PRIVATE KairoAssets Catch2::Catch2WithMain nlohmann_json::nlohmann_json)'
+          text = text.replace('target_link_libraries(KairoAssetsTests PRIVATE KairoAssets Catch2::Catch2WithMain)', test_link)
+          cmake.write_text(text)
+
+          umbrella = Path('KairoAssets.cppm')
+          text = umbrella.read_text()
+          marker = 'export import Kairo.Assets.OBJImporter;\n'
+          line = 'export import Kairo.Assets.GLBImporter;\n'
+          if line not in text:
+              if marker not in text:
+                  raise SystemExit('umbrella marker not found')
+              umbrella.write_text(text.replace(marker, marker + line, 1))
+
+          Path('.github/workflows/apply-glb-importer-registration.yml').unlink()
+          PY
+      - name: Commit registration
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Register static GLB importer"
+          git push
