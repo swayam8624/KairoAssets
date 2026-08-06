@@ -42,21 +42,14 @@ jobs:
         shell: bash
         run: |
           set +e
-          if [[ "${{ matrix.compiler }}" == "clang" ]]; then
-            export CC=clang
-            export CXX=clang++
-          fi
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
+          if [[ "${{ matrix.compiler }}" == "clang" ]]; then export CC=clang; export CXX=clang++; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DKAIRO_ASSETS_BUILD_TESTS=ON 2>&1 | tee configure.log
           status=${PIPESTATUS[0]}
           if [[ $status -ne 0 ]]; then
-            {
-              echo '## Configure failure'
-              echo '```text'
-              tail -n 160 configure.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            message=$(tail -n 80 configure.log)
+            message=${message//'%'/'%25'}; message=${message//$'\r'/'%0D'}; message=${message//$'\n'/'%0A'}
+            echo "::error file=configure.log,title=Configure failure::$message"
           fi
           exit $status
       - name: Build
@@ -66,12 +59,9 @@ jobs:
           cmake --build build --parallel 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [[ $status -ne 0 ]]; then
-            {
-              echo '## Build failure'
-              echo '```text'
-              tail -n 240 build.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            message=$(tail -n 120 build.log)
+            message=${message//'%'/'%25'}; message=${message//$'\r'/'%0D'}; message=${message//$'\n'/'%0A'}
+            echo "::error file=build.log,title=Build failure::$message"
           fi
           exit $status
       - name: Test
@@ -81,11 +71,8 @@ jobs:
           ctest --test-dir build --output-on-failure 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           if [[ $status -ne 0 ]]; then
-            {
-              echo '## Test failure'
-              echo '```text'
-              tail -n 240 test.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            message=$(tail -n 120 test.log)
+            message=${message//'%'/'%25'}; message=${message//$'\r'/'%0D'}; message=${message//$'\n'/'%0A'}
+            echo "::error file=test.log,title=Test failure::$message"
           fi
           exit $status
