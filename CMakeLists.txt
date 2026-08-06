@@ -28,8 +28,6 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     DerivedArtifact.cppm
     MeshArtifact.cppm
     TextureArtifact.cppm
-    MaterialArtifact.cppm
-    GltfSceneArtifact.cppm
     SourceWatcher.cppm
     Importer.cppm
     ImporterRegistry.cppm
@@ -55,7 +53,7 @@ if(KAIRO_ASSETS_BUILD_TESTS)
         GIT_TAG v3.5.4)
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(KairoAssetsTests tests/AssetTests.cpp)
+    add_executable(KairoAssetsTests tests/AssetTests.cpp tests/TextureArtifactTests.cpp)
     target_link_libraries(KairoAssetsTests PRIVATE KairoAssets Catch2::Catch2WithMain)
     add_executable(KairoAssetsPhase2Tests tests/Phase2AssetTests.cpp)
     target_link_libraries(KairoAssetsPhase2Tests PRIVATE KairoAssets Catch2::Catch2WithMain)
