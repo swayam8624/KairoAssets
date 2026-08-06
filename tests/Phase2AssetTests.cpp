@@ -9,8 +9,10 @@
 
 import Kairo.Assets.AssetID;
 import Kairo.Assets.BuiltinImporters;
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.GltfImporter;
 import Kairo.Assets.GltfSceneArtifact;
+import Kairo.Assets.ImportDatabase;
 import Kairo.Assets.Importer;
 import Kairo.Assets.ImporterRegistry;
 import Kairo.Assets.MaterialArtifact;
