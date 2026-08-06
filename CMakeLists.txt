@@ -29,8 +29,6 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     DerivedArtifact.cppm
     MeshArtifact.cppm
     TextureArtifact.cppm
-    MaterialArtifact.cppm
-    GltfSceneArtifact.cppm
     SourceWatcher.cppm
     Importer.cppm
     ImporterRegistry.cppm
