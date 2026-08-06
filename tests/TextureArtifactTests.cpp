@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <cstdint>
+#include <span>
 #include <vector>
 
 import Kairo.Assets.TextureArtifact;
