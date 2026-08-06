@@ -30,10 +30,13 @@ export namespace kairo::assets
         ImportRecord Record;
         AssetType ExpectedType = AssetType::Other;
         std::span<const std::byte> SourceBytes;
+        std::filesystem::path SourcePath;
     };
 
-    /// Pure importer plugin contract. Implementations transform source bytes
-    /// into a typed, versioned artifact; they do not mutate registries or caches.
+    /// Importer plugin contract. Implementations transform validated source
+    /// bytes into a typed, versioned artifact. SourcePath is supplied for
+    /// compound formats such as glTF that may resolve sibling dependencies;
+    /// importers still do not mutate registries, databases, or caches.
     class AssetImporter
     {
     public:
@@ -114,7 +117,7 @@ export namespace kairo::assets
         }
         else
         {
-            artifact = importer.Import({ record, metadata.Type, bytes });
+            artifact = importer.Import({ record, metadata.Type, bytes, source });
             ValidateDerivedArtifact(artifact);
             if (artifact.Type != metadata.Type)
                 throw std::invalid_argument("Importer artifact type does not match asset registry metadata.");
