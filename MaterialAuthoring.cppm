@@ -17,6 +17,7 @@ export module Kairo.Assets.MaterialAuthoring;
 import Kairo.Assets.EditableMesh;
 import Kairo.Assets.UVAuthoring;
 import Kairo.Assets.MaterialArtifact;
+import Kairo.Assets.Metadata;
 
 export namespace kairo::assets
 {
