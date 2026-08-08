@@ -53,7 +53,19 @@ export namespace kairo::assets
         bool DoubleSided = false;
         MaterialTextureSlots Textures;
 
-        friend bool operator==(const MaterialArtifactData&, const MaterialArtifactData&) = default;
+        friend bool operator==(const MaterialArtifactData& left, const MaterialArtifactData& right) noexcept
+        {
+            return std::ranges::equal(left.BaseColorFactor, right.BaseColorFactor) &&
+                left.MetallicFactor == right.MetallicFactor &&
+                left.RoughnessFactor == right.RoughnessFactor &&
+                std::ranges::equal(left.EmissiveFactor, right.EmissiveFactor) &&
+                left.NormalScale == right.NormalScale &&
+                left.OcclusionStrength == right.OcclusionStrength &&
+                left.AlphaMode == right.AlphaMode &&
+                left.AlphaCutoff == right.AlphaCutoff &&
+                left.DoubleSided == right.DoubleSided &&
+                left.Textures == right.Textures;
+        }
     };
 
     namespace material_artifact_detail

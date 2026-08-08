@@ -2,7 +2,9 @@ module;
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -100,11 +102,12 @@ export namespace kairo::assets
 
         [[nodiscard]] inline double ParseNumber(const Token& token, std::size_t line, std::string_view label)
         {
-            double value = 0.0;
-            const char* begin = token.Text.data();
-            const char* end = begin + token.Text.size();
-            const auto parsed = std::from_chars(begin, end, value, std::chars_format::general);
-            if (parsed.ec != std::errc{} || parsed.ptr != end || !std::isfinite(value))
+            const std::string owned(token.Text);
+            char* parsedEnd = nullptr;
+            errno = 0;
+            const double value = std::strtod(owned.c_str(), &parsedEnd);
+            if (parsedEnd != owned.c_str() + owned.size() || parsedEnd == owned.c_str() ||
+                errno == ERANGE || !std::isfinite(value))
                 Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
             return value;
         }
