@@ -4,6 +4,7 @@ module;
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -216,7 +217,7 @@ export namespace kairo::assets
         std::map<EditableVertexID, EditableVertexID> copied;
         for (const auto& [id, vertex] : before.Vertices()) copied.emplace(id, rebuilt.AddVertex(vertex.Position));
         std::map<EditableEdgeKey, EditableVertexID> midpoint;
-        const auto midpointFor = [&](EditableVertexID a, EditableVertexID b) mutable -> EditableVertexID {
+        auto midpointFor = [&](EditableVertexID a, EditableVertexID b) -> EditableVertexID {
             const auto edge = EditableEdgeKey::Canonical(a, b);
             const auto found = midpoint.find(edge);
             if (found != midpoint.end()) return found->second;

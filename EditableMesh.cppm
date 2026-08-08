@@ -6,6 +6,7 @@ module;
 #include <compare>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
