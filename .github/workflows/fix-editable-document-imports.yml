@@ -1,0 +1,22 @@
+name: Fix editable document imports
+on:
+  push:
+    branches:
+      - agent/phases8-11-authoring-completion
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/phases8-11-authoring-completion
+      - run: python3 .github/scripts/fix_editable_document_imports.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Fix editable mesh document module imports"
+          git push
