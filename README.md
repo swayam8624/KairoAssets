@@ -210,6 +210,14 @@ Diagnostics carry exact line/column locations. Material partitions, lines, and
 points fail explicitly because mesh artifact v1 cannot preserve those semantics;
 the importer never silently discards authored render data.
 
+`GltfSceneImporter` and `GLBSceneImporter` decode static glTF 2.0 scenes while
+preserving node hierarchy, local transforms, primitive material bindings, PBR
+material factors, texture references, normals, UVs, and tangents. The source
+adapter removes zero-area cleanup triangles in stable source order because the
+canonical `MeshArtifactData` contract deliberately rejects degenerate geometry;
+a primitive with no usable triangle still fails explicitly. Unsupported glTF
+features remain diagnosed instead of being silently approximated.
+
 ## Next Asset Milestones
 
 ```text
@@ -221,8 +229,8 @@ A5 portable source observation and reimport signals         complete
 A6 executable typed importer transaction + raw importer     complete
 A7 version-aware importer plugin registry                     complete
 A8 portable mesh artifact + strict OBJ geometry importer       complete
-A9 glTF/material/texture/scene decoder plugins                  next
-A10 editor asset browser, thumbnails, drag/drop
+A9 glTF/material/texture/scene decoder plugins              complete
+A10 editor asset browser, thumbnails, drag/drop                 next
 ```
 
 Runtime loaders will depend on `KairoAssets`; this repository will not depend

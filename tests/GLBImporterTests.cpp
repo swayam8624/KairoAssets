@@ -7,8 +7,10 @@
 #include <string>
 #include <vector>
 
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.GLBImporter;
 import Kairo.Assets.MeshArtifact;
+import Kairo.Assets.Types;
 
 namespace
 {

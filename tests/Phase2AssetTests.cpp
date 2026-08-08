@@ -16,6 +16,7 @@ import Kairo.Assets.ImportDatabase;
 import Kairo.Assets.Importer;
 import Kairo.Assets.ImporterRegistry;
 import Kairo.Assets.MaterialArtifact;
+import Kairo.Assets.Metadata;
 import Kairo.Assets.TextureArtifact;
 import Kairo.Assets.TextureImporter;
 import Kairo.Assets.Types;
@@ -90,7 +91,6 @@ TEST_CASE("Material artifact round trips PBR factors and typed texture reference
 {
     using namespace kairo::assets;
     MaterialArtifactData material;
-    material.Name = "Painted metal";
     material.BaseColorFactor = { 0.8f, 0.2f, 0.1f, 1.0f };
     material.MetallicFactor = 0.9f;
     material.RoughnessFactor = 0.35f;
@@ -98,8 +98,9 @@ TEST_CASE("Material artifact round trips PBR factors and typed texture reference
     material.AlphaMode = MaterialAlphaMode::Mask;
     material.AlphaCutoff = 0.45f;
     material.DoubleSided = true;
-    material.BaseColorTexture = MaterialTextureReference{ FixedAssetID(1u), 0u, 1.0f };
-    material.NormalTexture = MaterialTextureReference{ FixedAssetID(32u), 0u, 0.75f };
+    material.NormalScale = 0.75f;
+    material.Textures.BaseColor = TextureAssetHandle{ FixedAssetID(1u) };
+    material.Textures.Normal = TextureAssetHandle{ FixedAssetID(32u) };
     CHECK(ParseMaterialDerivedArtifact(MakeMaterialDerivedArtifact(material)) == material);
 }
 

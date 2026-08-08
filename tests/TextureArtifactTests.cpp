@@ -4,6 +4,7 @@
 #include <span>
 #include <vector>
 
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.TextureArtifact;
 
 namespace

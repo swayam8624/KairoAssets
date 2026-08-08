@@ -17,6 +17,7 @@ module;
 
 export module Kairo.Assets.GLBImporter;
 
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.Importer;
 import Kairo.Assets.MeshArtifact;
 import Kairo.Assets.Types;

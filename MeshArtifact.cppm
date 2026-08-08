@@ -106,6 +106,30 @@ export namespace kairo::assets
         }
     }
 
+    /// Input: three vertex indices and their source vertex array.
+    /// Output: true when indices repeat or the geometric area is negligible
+    /// relative to the triangle's longest edge.
+    /// Task: provide one scale-relative degeneracy rule for source importers
+    /// and canonical artifact validation. Out-of-range indices throw because
+    /// they indicate corruption, not geometric degeneracy.
+    [[nodiscard]] inline bool IsDegenerateMeshTriangle(
+        const std::vector<MeshArtifactVertex>& vertices,
+        std::uint32_t ia, std::uint32_t ib, std::uint32_t ic)
+    {
+        if (ia >= vertices.size() || ib >= vertices.size() || ic >= vertices.size())
+            throw std::out_of_range("Mesh artifact index exceeds vertex count.");
+        if (ia == ib || ib == ic || ia == ic) return true;
+        const auto ab = mesh_artifact_detail::Subtract(vertices[ib].Position, vertices[ia].Position);
+        const auto ac = mesh_artifact_detail::Subtract(vertices[ic].Position, vertices[ia].Position);
+        const auto bc = mesh_artifact_detail::Subtract(vertices[ic].Position, vertices[ib].Position);
+        const double maximumEdgeSquared = std::max({ mesh_artifact_detail::LengthSquared(ab),
+            mesh_artifact_detail::LengthSquared(ac), mesh_artifact_detail::LengthSquared(bc) });
+        const double areaSquared = mesh_artifact_detail::LengthSquared(
+            mesh_artifact_detail::Cross(ab, ac));
+        return maximumEdgeSquared == 0.0 ||
+            areaSquared <= maximumEdgeSquared * maximumEdgeSquared * 1.0e-12;
+    }
+
     [[nodiscard]] inline MeshArtifactBounds ComputeMeshArtifactBounds(const MeshArtifactData& mesh)
     {
         if (mesh.Vertices.empty()) throw std::invalid_argument("Mesh artifact requires vertices.");
@@ -165,17 +189,7 @@ export namespace kairo::assets
             const std::uint32_t ia = mesh.Indices[triangle];
             const std::uint32_t ib = mesh.Indices[triangle + 1u];
             const std::uint32_t ic = mesh.Indices[triangle + 2u];
-            if (ia >= mesh.Vertices.size() || ib >= mesh.Vertices.size() || ic >= mesh.Vertices.size())
-                throw std::out_of_range("Mesh artifact index exceeds vertex count.");
-            if (ia == ib || ib == ic || ia == ic)
-                throw std::invalid_argument("Mesh artifact triangle repeats a vertex index.");
-            const auto ab = mesh_artifact_detail::Subtract(mesh.Vertices[ib].Position, mesh.Vertices[ia].Position);
-            const auto ac = mesh_artifact_detail::Subtract(mesh.Vertices[ic].Position, mesh.Vertices[ia].Position);
-            const auto bc = mesh_artifact_detail::Subtract(mesh.Vertices[ic].Position, mesh.Vertices[ib].Position);
-            const double maximumEdgeSquared = std::max({ mesh_artifact_detail::LengthSquared(ab),
-                mesh_artifact_detail::LengthSquared(ac), mesh_artifact_detail::LengthSquared(bc) });
-            const double areaSquared = mesh_artifact_detail::LengthSquared(mesh_artifact_detail::Cross(ab, ac));
-            if (maximumEdgeSquared == 0.0 || areaSquared <= maximumEdgeSquared * maximumEdgeSquared * 1.0e-12)
+            if (IsDegenerateMeshTriangle(mesh.Vertices, ia, ib, ic))
                 throw std::invalid_argument("Mesh artifact contains a degenerate triangle.");
         }
     }

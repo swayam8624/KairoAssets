@@ -230,6 +230,26 @@ export namespace kairo::assets
                     primitive.Mesh.Indices[index] = static_cast<std::uint32_t>(index);
             }
 
+            // Real-world glTF files may contain zero-area cleanup triangles.
+            // They are not valid canonical Kairo geometry, so filter them at
+            // the source boundary while preserving the order of every valid
+            // triangle. A primitive containing no usable geometry is rejected.
+            std::vector<std::uint32_t> filteredIndices;
+            filteredIndices.reserve(primitive.Mesh.Indices.size());
+            for (std::size_t triangle = 0u;
+                triangle < primitive.Mesh.Indices.size(); triangle += 3u)
+            {
+                const std::uint32_t ia = primitive.Mesh.Indices[triangle];
+                const std::uint32_t ib = primitive.Mesh.Indices[triangle + 1u];
+                const std::uint32_t ic = primitive.Mesh.Indices[triangle + 2u];
+                if (IsDegenerateMeshTriangle(primitive.Mesh.Vertices, ia, ib, ic)) continue;
+                filteredIndices.insert(filteredIndices.end(), { ia, ib, ic });
+            }
+            if (filteredIndices.empty())
+                throw std::invalid_argument(
+                    "glTF primitive contains no non-degenerate triangles.");
+            primitive.Mesh.Indices = std::move(filteredIndices);
+
             if (source.material != nullptr)
             {
                 const std::ptrdiff_t materialIndex = source.material - data.materials;

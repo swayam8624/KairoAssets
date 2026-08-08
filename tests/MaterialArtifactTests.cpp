@@ -4,6 +4,7 @@
 #include <span>
 
 import Kairo.Assets.AssetID;
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.MaterialArtifact;
 import Kairo.Assets.Metadata;
 
