@@ -302,9 +302,9 @@ export namespace kairo::assets
             RequireToken(input, "tex");
             const AssetID id = AssetID::Parse(Read<std::string>(input, "texture asset ID"));
             TextureAuthoringSettings settings;
-            settings.ColorSpace = static_cast<TextureColorSpace>(Read<unsigned>(input, "texture color space"));
-            settings.Semantic = static_cast<TextureSemantic>(Read<unsigned>(input, "texture semantic"));
-            settings.Mips = static_cast<TextureMipPolicy>(Read<unsigned>(input, "texture mip policy"));
+            settings.ColorSpace = static_cast<TextureAuthoringColorSpace>(Read<unsigned>(input, "texture color space"));
+            settings.Semantic = static_cast<TextureAuthoringSemantic>(Read<unsigned>(input, "texture semantic"));
+            settings.Mips = static_cast<TextureAuthoringMipPolicy>(Read<unsigned>(input, "texture mip policy"));
             settings.MaximumResolution = Read<std::uint32_t>(input, "texture maximum resolution");
             const unsigned flip = Read<unsigned>(input, "texture flip flag");
             if (flip > 1u) throw std::invalid_argument("Editable mesh document texture flip flag is invalid.");

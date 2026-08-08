@@ -41,11 +41,11 @@ TEST_CASE("material authoring validates texture semantics and exposes PBR channe
 {
     using namespace kairo::assets;
     TextureAuthoringSettings normal;
-    normal.Semantic = TextureSemantic::Normal;
-    normal.ColorSpace = TextureColorSpace::Linear;
+    normal.Semantic = TextureAuthoringSemantic::Normal;
+    normal.ColorSpace = TextureAuthoringColorSpace::Linear;
     normal.Validate();
-    CHECK(normal.ResolvedColorSpace() == TextureColorSpace::Linear);
-    normal.ColorSpace = TextureColorSpace::SRGB;
+    CHECK(normal.ResolvedColorSpace() == TextureAuthoringColorSpace::Linear);
+    normal.ColorSpace = TextureAuthoringColorSpace::SRGB;
     CHECK_THROWS_AS(normal.Validate(), std::invalid_argument);
 
     MaterialArtifactData material;
@@ -82,8 +82,8 @@ TEST_CASE("editable mesh document round trips topology UVs modifiers materials a
 
     const AssetID textureID = AssetID::Parse("12345678-1234-4abc-8def-1234567890ab");
     TextureAuthoringSettings settings;
-    settings.Semantic = TextureSemantic::BaseColor;
-    settings.ColorSpace = TextureColorSpace::SRGB;
+    settings.Semantic = TextureAuthoringSemantic::BaseColor;
+    settings.ColorSpace = TextureAuthoringColorSpace::SRGB;
     settings.MaximumResolution = 4096u;
     document.Materials.BindTexture(TextureAssetHandle{ textureID }, settings);
 

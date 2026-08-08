@@ -21,14 +21,14 @@ import Kairo.Assets.Metadata;
 
 export namespace kairo::assets
 {
-    enum class TextureColorSpace : std::uint8_t
+    enum class TextureAuthoringColorSpace : std::uint8_t
     {
         Auto,
         Linear,
         SRGB
     };
 
-    enum class TextureSemantic : std::uint8_t
+    enum class TextureAuthoringSemantic : std::uint8_t
     {
         Generic,
         BaseColor,
@@ -38,7 +38,7 @@ export namespace kairo::assets
         Occlusion
     };
 
-    enum class TextureMipPolicy : std::uint8_t
+    enum class TextureAuthoringMipPolicy : std::uint8_t
     {
         Generate,
         Preserve,
@@ -47,9 +47,9 @@ export namespace kairo::assets
 
     struct TextureAuthoringSettings final
     {
-        TextureColorSpace ColorSpace = TextureColorSpace::Auto;
-        TextureSemantic Semantic = TextureSemantic::Generic;
-        TextureMipPolicy Mips = TextureMipPolicy::Generate;
+        TextureAuthoringColorSpace ColorSpace = TextureAuthoringColorSpace::Auto;
+        TextureAuthoringSemantic Semantic = TextureAuthoringSemantic::Generic;
+        TextureAuthoringMipPolicy Mips = TextureAuthoringMipPolicy::Generate;
         std::uint32_t MaximumResolution = 8192u;
         bool FlipVertical = false;
 
@@ -57,22 +57,22 @@ export namespace kairo::assets
         {
             if (MaximumResolution == 0u || MaximumResolution > 32768u)
                 throw std::invalid_argument("Texture authoring maximum resolution must be in [1, 32768].");
-            if (Semantic == TextureSemantic::Normal && ColorSpace == TextureColorSpace::SRGB)
+            if (Semantic == TextureAuthoringSemantic::Normal && ColorSpace == TextureAuthoringColorSpace::SRGB)
                 throw std::invalid_argument("Normal maps must not be imported as sRGB data.");
-            if ((Semantic == TextureSemantic::MetallicRoughness ||
-                 Semantic == TextureSemantic::Occlusion) &&
-                ColorSpace == TextureColorSpace::SRGB)
+            if ((Semantic == TextureAuthoringSemantic::MetallicRoughness ||
+                 Semantic == TextureAuthoringSemantic::Occlusion) &&
+                ColorSpace == TextureAuthoringColorSpace::SRGB)
                 throw std::invalid_argument("Data textures must not be imported as sRGB data.");
         }
 
-        [[nodiscard]] TextureColorSpace ResolvedColorSpace() const noexcept
+        [[nodiscard]] TextureAuthoringColorSpace ResolvedColorSpace() const noexcept
         {
-            if (ColorSpace != TextureColorSpace::Auto) return ColorSpace;
+            if (ColorSpace != TextureAuthoringColorSpace::Auto) return ColorSpace;
             switch (Semantic)
             {
-                case TextureSemantic::BaseColor:
-                case TextureSemantic::Emissive: return TextureColorSpace::SRGB;
-                default: return TextureColorSpace::Linear;
+                case TextureAuthoringSemantic::BaseColor:
+                case TextureAuthoringSemantic::Emissive: return TextureAuthoringColorSpace::SRGB;
+                default: return TextureAuthoringColorSpace::Linear;
             }
         }
     };
