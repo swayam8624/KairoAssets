@@ -1,4 +1,6 @@
 #include <array>
+#include <cstdint>
+#include <stdexcept>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -46,6 +48,35 @@ TEST_CASE("Editable mesh transactions rollback invalid authoring")
         (void)mesh.AddVertex({ 2.0, 2.0, 2.0 });
     }
     CHECK(mesh.Vertices().size() == before);
+}
+
+TEST_CASE("Editable mesh cook deterministically rejects degenerate authored polygons")
+{
+    using namespace kairo::assets;
+    EditableMesh mesh;
+    const auto a = mesh.AddVertex({ 0.0, 0.0, 0.0 });
+    const auto b = mesh.AddVertex({ 1.0, 0.0, 0.0 });
+    const auto c = mesh.AddVertex({ 2.0, 0.0, 0.0 });
+    (void)mesh.AddFace({ a, b, c });
+
+    REQUIRE(mesh.Validate().Valid);
+    REQUIRE_THROWS_AS(CookEditableMesh(mesh), std::invalid_argument);
+}
+
+TEST_CASE("Editable mesh stable identities produce byte-identical repeated cooks")
+{
+    using namespace kairo::assets;
+    EditableMesh mesh;
+    const auto a = mesh.AddVertex({ -1.0, -1.0, 0.0 });
+    const auto b = mesh.AddVertex({  1.0, -1.0, 0.0 });
+    const auto c = mesh.AddVertex({  1.0,  1.0, 0.0 });
+    const auto d = mesh.AddVertex({ -1.0,  1.0, 0.0 });
+    (void)mesh.AddFace({ a, b, c, d }, 4u);
+
+    const auto first = CookEditableMesh(mesh);
+    const auto second = CookEditableMesh(mesh);
+    CHECK(first == second);
+    CHECK(first.Indices == std::vector<std::uint32_t>{ 0u, 1u, 2u, 0u, 2u, 3u });
 }
 
 TEST_CASE("UV authoring unwraps packs and cooks per-corner coordinates")
