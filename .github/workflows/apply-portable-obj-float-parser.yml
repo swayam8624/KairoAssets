@@ -1,9 +1,9 @@
-name: Apply portable OBJ float parser
+name: Apply roadmap portability repair
 
 on:
   push:
     branches:
-      - agent/phase2-production-assets
+      - agent/complete-roadmap
 
 permissions:
   contents: write
@@ -15,15 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: agent/phase2-production-assets
-      - name: Replace unavailable floating from_chars
+          ref: agent/complete-roadmap
+          fetch-depth: 0
+      - name: Repair Assets portability
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('OBJImporter.cppm')
-          text = path.read_text()
-          text = text.replace('#include <charconv>\n', '#include <cerrno>\n#include <charconv>\n#include <cstdlib>\n', 1)
+
+          obj = Path('OBJImporter.cppm')
+          text = obj.read_text()
           old = '''        [[nodiscard]] inline double ParseNumber(const Token& token, std::size_t line, std::string_view label)
         {
             double value = 0.0;
@@ -36,22 +37,102 @@ jobs:
         }'''
           new = '''        [[nodiscard]] inline double ParseNumber(const Token& token, std::size_t line, std::string_view label)
         {
-            const std::string owned(token.Text);
-            char* parsedEnd = nullptr;
-            errno = 0;
-            const double value = std::strtod(owned.c_str(), &parsedEnd);
-            if (parsedEnd != owned.c_str() + owned.size() || parsedEnd == owned.c_str() ||
-                errno == ERANGE || !std::isfinite(value))
+            const std::string_view input = token.Text;
+            std::size_t cursor = 0u;
+            bool negative = false;
+            if (cursor < input.size() && (input[cursor] == '+' || input[cursor] == '-'))
+            {
+                negative = input[cursor] == '-';
+                ++cursor;
+            }
+            long double significand = 0.0L;
+            bool sawDigit = false;
+            while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
+            {
+                sawDigit = true;
+                significand = significand * 10.0L + static_cast<long double>(input[cursor] - '0');
+                ++cursor;
+            }
+            int fractionalDigits = 0;
+            if (cursor < input.size() && input[cursor] == '.')
+            {
+                ++cursor;
+                while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
+                {
+                    sawDigit = true;
+                    significand = significand * 10.0L + static_cast<long double>(input[cursor] - '0');
+                    ++fractionalDigits;
+                    ++cursor;
+                }
+            }
+            if (!sawDigit) Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
+            int exponent = -fractionalDigits;
+            if (cursor < input.size() && (input[cursor] == 'e' || input[cursor] == 'E'))
+            {
+                ++cursor;
+                bool exponentNegative = false;
+                if (cursor < input.size() && (input[cursor] == '+' || input[cursor] == '-'))
+                {
+                    exponentNegative = input[cursor] == '-';
+                    ++cursor;
+                }
+                if (cursor == input.size() || input[cursor] < '0' || input[cursor] > '9')
+                    Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
+                int parsedExponent = 0;
+                while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
+                {
+                    if (parsedExponent > 10000)
+                        Fail(line, token.Column, "numeric exponent is out of range.");
+                    parsedExponent = parsedExponent * 10 + (input[cursor] - '0');
+                    ++cursor;
+                }
+                exponent += exponentNegative ? -parsedExponent : parsedExponent;
+            }
+            if (cursor != input.size() || exponent < -10000 || exponent > 10000)
                 Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
-            return value;
+            long double value = significand;
+            if (exponent != 0) value *= std::pow(10.0L, static_cast<long double>(exponent));
+            if (negative) value = -value;
+            const double result = static_cast<double>(value);
+            if (!std::isfinite(result))
+                Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
+            return result;
         }'''
           if old not in text:
               raise SystemExit('OBJ ParseNumber block was not found')
-          path.write_text(text.replace(old, new, 1))
-          Path('.github/workflows/apply-portable-obj-float-parser.yml').unlink()
+          obj.write_text(text.replace(old, new, 1))
+
+          glb = Path('GLBImporter.cppm')
+          text = glb.read_text()
+          if 'import Kairo.Assets.DerivedArtifact;' not in text:
+              marker = 'import Kairo.Assets.Importer;\n'
+              if marker not in text:
+                  raise SystemExit('GLB import marker missing')
+              glb.write_text(text.replace(marker, marker + 'import Kairo.Assets.DerivedArtifact;\n', 1))
+
+          mat = Path('MaterialArtifact.cppm')
+          text = mat.read_text()
+          old = '        friend bool operator==(const MaterialArtifactData&, const MaterialArtifactData&) = default;'
+          new = '''        friend bool operator==(const MaterialArtifactData& left, const MaterialArtifactData& right) noexcept
+        {
+            return std::ranges::equal(left.BaseColorFactor, right.BaseColorFactor) &&
+                left.MetallicFactor == right.MetallicFactor &&
+                left.RoughnessFactor == right.RoughnessFactor &&
+                std::ranges::equal(left.EmissiveFactor, right.EmissiveFactor) &&
+                left.NormalScale == right.NormalScale &&
+                left.OcclusionStrength == right.OcclusionStrength &&
+                left.AlphaMode == right.AlphaMode &&
+                left.AlphaCutoff == right.AlphaCutoff &&
+                left.DoubleSided == right.DoubleSided && left.Textures == right.Textures;
+        }'''
+          if old not in text:
+              raise SystemExit('Material equality block missing')
+          mat.write_text(text.replace(old, new, 1))
           PY
+          rm -f .github/workflows/apply-roadmap-portability.yml
+          rm -f .github/workflows/apply-portable-obj-float-parser.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add OBJImporter.cppm .github/workflows/apply-portable-obj-float-parser.yml
-          git commit -m 'Make OBJ float parsing portable on macOS'
-          git push origin HEAD:agent/phase2-production-assets
+          git add -A
+          git commit -m 'Repair Assets portability across Windows and macOS'
+          git push origin HEAD:agent/complete-roadmap
