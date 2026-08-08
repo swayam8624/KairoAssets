@@ -2,7 +2,9 @@ module;
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -100,74 +102,14 @@ export namespace kairo::assets
 
         [[nodiscard]] inline double ParseNumber(const Token& token, std::size_t line, std::string_view label)
         {
-            // Floating-point std::from_chars is still deployment-target gated by
-            // some libc++ releases. OBJ numbers have a deliberately small grammar,
-            // so parse that grammar directly and keep behavior locale-independent.
-            const std::string_view input = token.Text;
-            std::size_t cursor = 0u;
-            bool negative = false;
-            if (cursor < input.size() && (input[cursor] == '+' || input[cursor] == '-'))
-            {
-                negative = input[cursor] == '-';
-                ++cursor;
-            }
-
-            long double significand = 0.0L;
-            bool sawDigit = false;
-            while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
-            {
-                sawDigit = true;
-                significand = significand * 10.0L + static_cast<long double>(input[cursor] - '0');
-                ++cursor;
-            }
-
-            int fractionalDigits = 0;
-            if (cursor < input.size() && input[cursor] == '.')
-            {
-                ++cursor;
-                while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
-                {
-                    sawDigit = true;
-                    significand = significand * 10.0L + static_cast<long double>(input[cursor] - '0');
-                    ++fractionalDigits;
-                    ++cursor;
-                }
-            }
-            if (!sawDigit) Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
-
-            int exponent = -fractionalDigits;
-            if (cursor < input.size() && (input[cursor] == 'e' || input[cursor] == 'E'))
-            {
-                ++cursor;
-                bool exponentNegative = false;
-                if (cursor < input.size() && (input[cursor] == '+' || input[cursor] == '-'))
-                {
-                    exponentNegative = input[cursor] == '-';
-                    ++cursor;
-                }
-                if (cursor == input.size() || input[cursor] < '0' || input[cursor] > '9')
-                    Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
-                int parsedExponent = 0;
-                while (cursor < input.size() && input[cursor] >= '0' && input[cursor] <= '9')
-                {
-                    const int digit = input[cursor] - '0';
-                    if (parsedExponent > 10000)
-                        Fail(line, token.Column, "numeric exponent is out of range.");
-                    parsedExponent = parsedExponent * 10 + digit;
-                    ++cursor;
-                }
-                exponent += exponentNegative ? -parsedExponent : parsedExponent;
-            }
-            if (cursor != input.size() || exponent < -10000 || exponent > 10000)
+            const std::string owned(token.Text);
+            char* parsedEnd = nullptr;
+            errno = 0;
+            const double value = std::strtod(owned.c_str(), &parsedEnd);
+            if (parsedEnd != owned.c_str() + owned.size() || parsedEnd == owned.c_str() ||
+                errno == ERANGE || !std::isfinite(value))
                 Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
-
-            long double value = significand;
-            if (exponent != 0) value *= std::pow(10.0L, static_cast<long double>(exponent));
-            if (negative) value = -value;
-            const double result = static_cast<double>(value);
-            if (!std::isfinite(result))
-                Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
-            return result;
+            return value;
         }
 
         [[nodiscard]] inline std::int64_t ParseIndex(std::string_view text,
