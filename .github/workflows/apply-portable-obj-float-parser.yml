@@ -20,8 +20,58 @@ jobs:
       - name: Repair Assets portability
         shell: bash
         run: |
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpvYmogPSBQYXRoKCJPQkpJbXBvcnRlci5jcHBtIikKdGV4dCA9IG9iai5yZWFkX3RleHQoKQpvbGQgPSAnICAgICAgICBbW25vZGlzY2FyZF1dIGlubGluZSBkb3VibGUgUGFyc2VOdW1iZXIoY29uc3QgVG9rZW4mIHRva2VuLCBzdGQ6OnNpemVfdCBsaW5lLCBzdGQ6OnN0cmluZ192aWV3IGxhYmVsKVxuICAgICAgICB7XG4gICAgICAgICAgICBkb3VibGUgdmFsdWUgPSAwLjA7XG4gICAgICAgICAgICBjb25zdCBjaGFyKiBiZWdpbiA9IHRva2VuLlRleHQuZGF0YSgpO1xuICAgICAgICAgICAgY29uc3QgY2hhciogZW5kID0gYmVnaW4gKyB0b2tlbi5UZXh0LnNpemUoKTtcbiAgICAgICAgICAgIGNvbnN0IGF1dG8gcGFyc2VkID0gc3RkOjpmcm9tX2NoYXJzKGJlZ2luLCBlbmQsIHZhbHVlLCBzdGQ6OmNoYXJzX2Zvcm1hdDo6Z2VuZXJhbCk7XG4gICAgICAgICAgICBpZiAocGFyc2VkLmVjICE9IHN0ZDo6ZXJyY3t9IHx8IHBhcnNlZC5wdHIgIT0gZW5kIHx8ICFzdGQ6OmlzZmluaXRlKHZhbHVlKSlcbiAgICAgICAgICAgICAgICBGYWlsKGxpbmUsIHRva2VuLkNvbHVtbiwgImludmFsaWQgZmluaXRlICIgKyBzdGQ6OnN0cmluZyhsYWJlbCkgKyAiLiIpO1xuICAgICAgICAgICAgcmV0dXJuIHZhbHVlO1xuICAgICAgICB9JwpuZXcgPSAnICAgICAgICBbW25vZGlzY2FyZF1dIGlubGluZSBkb3VibGUgUGFyc2VOdW1iZXIoY29uc3QgVG9rZW4mIHRva2VuLCBzdGQ6OnNpemVfdCBsaW5lLCBzdGQ6OnN0cmluZ192aWV3IGxhYmVsKVxuICAgICAgICB7XG4gICAgICAgICAgICBjb25zdCBzdGQ6OnN0cmluZ192aWV3IGlucHV0ID0gdG9rZW4uVGV4dDtcbiAgICAgICAgICAgIHN0ZDo6c2l6ZV90IGN1cnNvciA9IDB1O1xuICAgICAgICAgICAgYm9vbCBuZWdhdGl2ZSA9IGZhbHNlO1xuICAgICAgICAgICAgaWYgKGN1cnNvciA8IGlucHV0LnNpemUoKSAmJiAoaW5wdXRbY3Vyc29yXSA9PSBcJytcJyB8fCBpbnB1dFtjdXJzb3JdID09IFwnLVwnKSlcbiAgICAgICAgICAgIHtcbiAgICAgICAgICAgICAgICBuZWdhdGl2ZSA9IGlucHV0W2N1cnNvcl0gPT0gXCctXCc7XG4gICAgICAgICAgICAgICAgKytjdXJzb3I7XG4gICAgICAgICAgICB9XG4gICAgICAgICAgICBsb25nIGRvdWJsZSBzaWduaWZpY2FuZCA9IDAuMEw7XG4gICAgICAgICAgICBib29sIHNhd0RpZ2l0ID0gZmFsc2U7XG4gICAgICAgICAgICB3aGlsZSAoY3Vyc29yIDwgaW5wdXQuc2l6ZSgpICYmIGlucHV0W2N1cnNvcl0gPj0gXCcwXCcgJiYgaW5wdXRbY3Vyc29yXSA8PSBcJzlcJylcbiAgICAgICAgICAgIHtcbiAgICAgICAgICAgICAgICBzYXdEaWdpdCA9IHRydWU7XG4gICAgICAgICAgICAgICAgc2lnbmlmaWNhbmQgPSBzaWduaWZpY2FuZCAqIDEwLjBMICsgc3RhdGljX2Nhc3Q8bG9uZyBkb3VibGU+KGlucHV0W2N1cnNvcl0gLSBcJzBcJyk7XG4gICAgICAgICAgICAgICAgKytjdXJzb3I7XG4gICAgICAgICAgICB9XG4gICAgICAgICAgICBpbnQgZnJhY3Rpb25hbERpZ2l0cyA9IDA7XG4gICAgICAgICAgICBpZiAoY3Vyc29yIDwgaW5wdXQuc2l6ZSgpICYmIGlucHV0W2N1cnNvcl0gPT0gXCcuXCcpXG4gICAgICAgICAgICB7XG4gICAgICAgICAgICAgICAgKytjdXJzb3I7XG4gICAgICAgICAgICAgICAgd2hpbGUgKGN1cnNvciA8IGlucHV0LnNpemUoKSAmJiBpbnB1dFtjdXJzb3JdID49IFwnMFwnICYmIGlucHV0W2N1cnNvcl0gPD0gXCc5XCcpXG4gICAgICAgICAgICAgICAge1xuICAgICAgICAgICAgICAgICAgICBzYXdEaWdpdCA9IHRydWU7XG4gICAgICAgICAgICAgICAgICAgIHNpZ25pZmljYW5kID0gc2lnbmlmaWZpY2FuZCAqIDEwLjBMICsgc3RhdGljX2Nhc3Q8bG9uZyBkb3VibGU+KGlucHV0W2N1cnNvcl0gLSBcJzBcJyk7XG4gICAgICAgICAgICAgICAgICAgICsrZnJhY3Rpb25hbERpZ2l0cztcbiAgICAgICAgICAgICAgICAgICAgKytjdXJzb3I7XG4gICAgICAgICAgICAgICAgfVxuICAgICAgICAgICAgfVxuICAgICAgICAgICAgaWYgKCFzYXdEaWdpdCkgRmFpbChsaW5lLCB0b2tlbi5Db2x1bW4sICJpbnZhbGlkIGZpbml0ZSAiICsgc3RkOjpzdHJpbmcobGFiZWwpICsgIi4iKTtcbiAgICAgICAgICAgIGludCBleHBvbmVudCA9IC1mcmFjdGlvbmFsRGlnaXRzO1xuICAgICAgICAgICAgaWYgKGN1cnNvciA8IGlucHV0LnNpemUoKSAmJiAoaW5wdXRbY3Vyc29yXSA9PSBcJ2VcJyB8fCBpbnB1dFtjdXJzb3JdID09IFwnRVwnKSlcbiAgICAgICAgICAgIHtcbiAgICAgICAgICAgICAgICArK2N1cnNvcjtcbiAgICAgICAgICAgICAgICBib29sIGV4cG9uZW50TmVnYXRpdmUgPSBmYWxzZTtcbiAgICAgICAgICAgICAgICBpZiAoY3Vyc29yIDwgaW5wdXQuc2l6ZSgpICYmIChpbnB1dFtjdXJzb3JdID09IFwnK1wnIHx8IGlucHV0W2N1cnNvcl0gPT0gXCctXCcpKVxuICAgICAgICAgICAgICAgIHtcbiAgICAgICAgICAgICAgICAgICAgZXhwb25lbnROZWdhdGl2ZSA9IGlucHV0W2N1cnNvcl0gPT0gXCctXCc7XG4gICAgICAgICAgICAgICAgICAgICsrY3Vyc29yO1xuICAgICAgICAgICAgICAgIH1cbiAgICAgICAgICAgICAgICBpZiAoY3Vyc29yID09IGlucHV0LnNpemUoKSB8fCBpbnB1dFtjdXJzb3JdIDwgXCcwXCcgfHwgaW5wdXRbY3Vyc29yXSA+IFwnOVwnKVxuICAgICAgICAgICAgICAgICAgICBGYWlsKGxpbmUsIHRva2VuLkNvbHVtbiwgImludmFsaWQgZmluaXRlICIgKyBzdGQ6OnN0cmluZyhsYWJlbCkgKyAiLiIpO1xuICAgICAgICAgICAgICAgIGludCBwYXJzZWRFeHBvbmVudCA9IDA7XG4gICAgICAgICAgICAgICAgd2hpbGUgKGN1cnNvciA8IGlucHV0LnNpemUoKSAmJiBpbnB1dFtjdXJzb3JdID49IFwnMFwnICYmIGlucHV0W2N1cnNvcl0gPD0gXCc5XCcpXG4gICAgICAgICAgICAgICAge1xuICAgICAgICAgICAgICAgICAgICBpZiAocGFyc2VkRXhwb25lbnQgPiAxMDAwMClcbiAgICAgICAgICAgICAgICAgICAgICAgIEZhaWwobGluZSwgdG9rZW4uQ29sdW1uLCAibnVtZXJpYyBleHBvbmVudCBpcyBvdXQgb2YgcmFuZ2UuIik7XG4gICAgICAgICAgICAgICAgICAgIHBhcnNlZEV4cG9uZW50ID0gcGFyc2VkRXhwb25lbnQgKiAxMCArIChpbnB1dFtjdXJzb3JdIC0gXCcwXCcpO1xuICAgICAgICAgICAgICAgICAgICArK2N1cnNvcjtcbiAgICAgICAgICAgICAgICB9XG4gICAgICAgICAgICAgICAgZXhwb25lbnQgKz0gZXhwb25lbnROZWdhdGl2ZSA/IC1wYXJzZWRFeHBvbmVudCA6IHBhcnNlZEV4cG9uZW50O1xuICAgICAgICAgICAgfVxuICAgICAgICAgICAgaWYgKGN1cnNvciAhPSBpbnB1dC5zaXplKCkgfHwgZXhwb25lbnQgPCAtMTAwMDAgfHwgZXhwb25lbnQgPiAxMDAwMClcbiAgICAgICAgICAgICAgICBGYWlsKGxpbmUsIHRva2VuLkNvbHVtbiwgImludmFsaWQgZmluaXRlICIgKyBzdGQ6OnN0cmluZyhsYWJlbCkgKyAiLiIpO1xuICAgICAgICAgICAgbG9uZyBkb3VibGUgdmFsdWUgPSBzaWduaWZpY2FuZDtcbiAgICAgICAgICAgIGlmIChleHBvbmVudCAhPSAwKSB2YWx1ZSAqPSBzdGQ6OnBvdygxMC4wTCwgc3RhdGljX2Nhc3Q8bG9uZyBkb3VibGU+KGV4cG9uZW50KSk7XG4gICAgICAgICAgICBpZiAobmVnYXRpdmUpIHZhbHVlID0gLXZhbHVlO1xuICAgICAgICAgICAgY29uc3QgZG91YmxlIHJlc3VsdCA9IHN0YXRpY19jYXN0PGRvdWJsZT4odmFsdWUpO1xuICAgICAgICAgICAgaWYgKCFzdGQ6OmlzZmluaXRlKHJlc3VsdCkpXG4gICAgICAgICAgICAgICAgRmFpbChsaW5lLCB0b2tlbi5Db2x1bW4sICJpbnZhbGlkIGZpbml0ZSAiICsgc3RkOjpzdHJpbmcobGFiZWwpICsgIi4iKTtcbiAgICAgICAgICAgIHJldHVybiByZXN1bHQ7XG4gICAgICAgIH0nCmlmIG9sZCBub3QgaW4gdGV4dDoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIk9CSiBQYXJzZU51bWJlciBibG9jayB3YXMgbm90IGZvdW5kIikKb2JqLndyaXRlX3RleHQodGV4dC5yZXBsYWNlKG9sZCwgbmV3LCAxKSkKCmdsYiA9IFBhdGgoIkdMQkltcG9ydGVyLmNwcG0iKQp0ZXh0ID0gZ2xiLnJlYWRfdGV4dCgpCmlmICJpbXBvcnQgS2Fpcm8uQXNzZXRzLkRlcml2ZWRBcnRpZmFjdDsiIG5vdCBpbiB0ZXh0OgogICAgbWFya2VyID0gImltcG9ydCBLYWlyby5Bc3NldHMuSW1wb3J0ZXI7XG4iCiAgICBpZiBtYXJrZXIgbm90IGluIHRleHQ6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgiR0xCIGltcG9ydCBtYXJrZXIgbWlzc2luZyIpCiAgICBnbGIud3JpdGVfdGV4dCh0ZXh0LnJlcGxhY2UobWFya2VyLCBtYXJrZXIgKyAiaW1wb3J0IEthaXJvLkFzc2V0cy5EZXJpdmVkQXJ0aWZhY3Q7XG4iLCAxKSkKCm1hdCA9IFBhdGgoIk1hdGVyaWFsQXJ0aWZhY3QuY3BwbSIpCnRleHQgPSBtYXQucmVhZF90ZXh0KCkKb2xkID0gIiAgICAgICAgZnJpZW5kIGJvb2wgb3BlcmF0b3I9PShjb25zdCBNYXRlcmlhbEFydGlmYWN0RGF0YSYsIGNvbnN0IE1hdGVyaWFsQXJ0aWZhY3REYXRhJikgPSBkZWZhdWx0OyIKbmV3ID0gJyAgICAgICAgZnJpZW5kIGJvb2wgb3BlcmF0b3I9PShjb25zdCBNYXRlcmlhbEFydGlmYWN0RGF0YSYgbGVmdCwgY29uc3QgTWF0ZXJpYWxBcnRpZmFjdERhdGEmIHJpZ2h0KSBub2V4Y2VwdFxuICAgICAgICB7XG4gICAgICAgICAgICByZXR1cm4gc3RkOjpyYW5nZXM6OmVxdWFsKGxlZnQuQmFzZUNvbG9yRmFjdG9yLCByaWdodC5CYXNlQ29sb3JGYWN0b3IpICYmXG4gICAgICAgICAgICAgICAgbGVmdC5NZXRhbGxpY0ZhY3RvciA9PSByaWdodC5NZXRhbGxpY0ZhY3RvciAmJlxuICAgICAgICAgICAgICAgIGxlZnQuUm91Z2huZXNzRmFjdG9yID09IHJpZ2h0LlJvdWdobmVzc0ZhY3RvciAmJlxuICAgICAgICAgICAgICAgIHN0ZDo6cmFuZ2VzOjplcXVhbChsZWZ0LkVtaXNzaXZlRmFjdG9yLCByaWdodC5FbWlzc2l2ZUZhY3RvcikgJiZcbiAgICAgICAgICAgICAgICBsZWZ0Lk5vcm1hbFNjYWxlID09IHJpZ2h0Lk5vcm1hbFNjYWxlICYmXG4gICAgICAgICAgICAgICAgbGVmdC5PY2NsdXNpb25TdHJlbmd0aCA9PSByaWdodC5PY2NsdXNpb25TdHJlbmd0aCAmJlxuICAgICAgICAgICAgICAgIGxlZnQuQWxwaGFNb2RlID09IHJpZ2h0LkFscGhhTW9kZSAmJlxuICAgICAgICAgICAgICAgIGxlZnQuQWxwaGFDdXRvZmYgPT0gcmlnaHQuQWxwaGFDdXRvZmYgJiZcbiAgICAgICAgICAgICAgICBsZWZ0LkRvdWJsZVNpZGVkID09IHJpZ2h0LkRvdWJsZVNpZGVkICYmIGxlZnQuVGV4dHVyZXMgPT0gcmlnaHQuVGV4dHVyZXM7XG4gICAgICAgIH0nCmlmIG9sZCBub3QgaW4gdGV4dDoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIk1hdGVyaWFsIGVxdWFsaXR5IGJsb2NrIG1pc3NpbmciKQptYXQud3JpdGVfdGV4dCh0ZXh0LnJlcGxhY2Uob2xkLCBuZXcsIDEpKQo=' | base64 -d > /tmp/kairo-assets-roadmap.py
-          python3 /tmp/kairo-assets-roadmap.py
+          cat > /tmp/patch.py <<'PY'
+          from pathlib import Path
+
+          p = Path("OBJImporter.cppm")
+          t = p.read_text()
+          if "#include <cerrno>\n" not in t:
+              t = t.replace("#include <charconv>\n", "#include <cerrno>\n#include <charconv>\n#include <cstdlib>\n", 1)
+          start = t.index("        [[nodiscard]] inline double ParseNumber")
+          end = t.index("        [[nodiscard]] inline std::int64_t ParseIndex", start)
+          fn = """        [[nodiscard]] inline double ParseNumber(const Token& token, std::size_t line, std::string_view label)
+                  {
+                      const std::string owned(token.Text);
+                      char* parsedEnd = nullptr;
+                      errno = 0;
+                      const double value = std::strtod(owned.c_str(), &parsedEnd);
+                      if (parsedEnd != owned.c_str() + owned.size() || parsedEnd == owned.c_str() ||
+                          errno == ERANGE || !std::isfinite(value))
+                          Fail(line, token.Column, "invalid finite " + std::string(label) + ".");
+                      return value;
+                  }
+
+          """
+          p.write_text(t[:start] + fn + t[end:])
+
+          p = Path("GLBImporter.cppm")
+          t = p.read_text()
+          if "import Kairo.Assets.DerivedArtifact;" not in t:
+              t = t.replace("import Kairo.Assets.Importer;\n",
+                            "import Kairo.Assets.Importer;\nimport Kairo.Assets.DerivedArtifact;\n", 1)
+          p.write_text(t)
+
+          p = Path("MaterialArtifact.cppm")
+          t = p.read_text()
+          old = "        friend bool operator==(const MaterialArtifactData&, const MaterialArtifactData&) = default;"
+          new = """        friend bool operator==(const MaterialArtifactData& left, const MaterialArtifactData& right) noexcept
+                  {
+                      return std::ranges::equal(left.BaseColorFactor, right.BaseColorFactor) &&
+                          left.MetallicFactor == right.MetallicFactor &&
+                          left.RoughnessFactor == right.RoughnessFactor &&
+                          std::ranges::equal(left.EmissiveFactor, right.EmissiveFactor) &&
+                          left.NormalScale == right.NormalScale &&
+                          left.OcclusionStrength == right.OcclusionStrength &&
+                          left.AlphaMode == right.AlphaMode &&
+                          left.AlphaCutoff == right.AlphaCutoff &&
+                          left.DoubleSided == right.DoubleSided &&
+                          left.Textures == right.Textures;
+                  }"""
+          if old in t:
+              t = t.replace(old, new, 1)
+          p.write_text(t)
+          PY
+          python3 /tmp/patch.py
           rm -f .github/workflows/apply-roadmap-portability.yml
           rm -f .github/workflows/apply-portable-obj-float-parser.yml
           git config user.name 'github-actions[bot]'
