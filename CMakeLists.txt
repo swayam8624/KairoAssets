@@ -33,6 +33,9 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     BinaryFormat.cppm
     DerivedArtifact.cppm
     MeshArtifact.cppm
+    EditableMesh.cppm
+    UVAuthoring.cppm
+    Sculpting.cppm
     TextureArtifact.cppm
     MaterialArtifact.cppm
     GltfSceneArtifact.cppm
@@ -67,7 +70,8 @@ if(KAIRO_ASSETS_BUILD_TESTS)
         tests/AssetTests.cpp
         tests/TextureArtifactTests.cpp
         tests/MaterialArtifactTests.cpp
-        tests/GLBImporterTests.cpp)
+        tests/GLBImporterTests.cpp
+        tests/AuthoringMeshTests.cpp)
     target_link_libraries(KairoAssetsTests PRIVATE
         KairoAssets Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
     add_executable(KairoAssetsPhase2Tests tests/Phase2AssetTests.cpp)

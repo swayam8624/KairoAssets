@@ -2,7 +2,9 @@ module;
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
