@@ -1,0 +1,22 @@
+name: Fix material equality portability
+on:
+  push:
+    branches:
+      - agent/phase1-5-portability-hardening
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/phase1-5-portability-hardening
+      - run: python3 .github/scripts/fix_material_equality.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Compare material artifacts explicitly across modules"
+          git push
