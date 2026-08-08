@@ -5,6 +5,7 @@ module;
 #include <cmath>
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <queue>
 #include <set>
 #include <stdexcept>

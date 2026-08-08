@@ -35,6 +35,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     MeshArtifact.cppm
     EditableMesh.cppm
     ModelingOperations.cppm
+    AdvancedModelingOperations.cppm
     UVAuthoring.cppm
     MaterialAuthoring.cppm
     EditableMeshDocument.cppm
@@ -77,6 +78,7 @@ if(KAIRO_ASSETS_BUILD_TESTS)
         tests/GLBImporterTests.cpp
         tests/AuthoringMeshTests.cpp
         tests/AuthoringCompletionTests.cpp
+        tests/AdvancedModelingOperationsTests.cpp
         tests/AuthoringDocumentTests.cpp
         tests/SculptProductionTests.cpp)
     target_link_libraries(KairoAssetsTests PRIVATE

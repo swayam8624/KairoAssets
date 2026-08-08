@@ -11,6 +11,7 @@ export import Kairo.Assets.DerivedArtifact;
 export import Kairo.Assets.MeshArtifact;
 export import Kairo.Assets.EditableMesh;
 export import Kairo.Assets.ModelingOperations;
+export import Kairo.Assets.AdvancedModelingOperations;
 export import Kairo.Assets.UVAuthoring;
 export import Kairo.Assets.MaterialAuthoring;
 export import Kairo.Assets.EditableMeshDocument;
