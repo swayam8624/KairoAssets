@@ -12,6 +12,8 @@ module;
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 export module Kairo.Assets.EditableMeshDocument;
@@ -22,6 +24,7 @@ import Kairo.Assets.ModelingOperations;
 import Kairo.Assets.UVAuthoring;
 import Kairo.Assets.MaterialAuthoring;
 import Kairo.Assets.MaterialArtifact;
+import Kairo.Assets.Metadata;
 import Kairo.Assets.Types;
 
 export namespace kairo::assets
