@@ -32,6 +32,8 @@ KairoAssets ----------------------> KairoEngineCore scene references
 - deterministic SHA-256 fingerprints for in-memory and streamed source bytes
 - thread-safe source-import provenance records with current/changed/missing checks
 - disk-backed content-addressed derived-data cache with byte-exact round trips
+- strict `kairo.publish.v1` DCC bundle parsing and SHA-256 verification
+- Blender glTF publish registration through the production scene importer
 
 The current milestone includes identity, deterministic manifest persistence, and
 source-provenance invalidation. Importer plugins, decoded-resource caching,
@@ -179,6 +181,30 @@ projects, duplicate identities are rejected, and snapshots are deterministic
 for diagnostics or editor presentation. It deliberately does not load dynamic
 libraries; a future signed plugin loader will publish validated instances into
 this same registry.
+
+## DCC Publish Handoff
+
+`LoadPipelinePublishManifest()` reads the same strict manifest emitted by the
+Blender, Houdini, Maya, and Nuke production tools. Unknown fields, unsupported
+schema versions, unsafe or duplicate paths, invalid fingerprints, and excessive
+record counts fail before the engine trusts the bundle.
+
+`ValidatePipelinePublishBundle()` verifies every declared output and dependency
+under the immutable version directory. Missing files, symlinks, directory
+escape, byte-count changes, and SHA-256 changes fail explicitly.
+
+`RegisterBlenderPublish(projectRoot, manifestPath, registry)` accepts a verified
+Blender asset publish containing exactly one glTF scene output. It registers the
+published project-relative source with `kairo.gltf.scene`; it does not rewrite
+the artist bundle or replace an existing registry path.
+
+```cpp
+AssetRegistry registry;
+const AssetID crate = RegisterBlenderPublish(
+    projectRoot,
+    projectRoot / "Published/Demo/asset/crate/v001/publish.kairo.json",
+    registry);
+```
 
 `DerivedArtifact` defines the versioned output envelope for those plugins:
 declared asset type, stable format identifier, positive format version, and

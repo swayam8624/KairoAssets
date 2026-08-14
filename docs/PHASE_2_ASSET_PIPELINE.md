@@ -12,6 +12,8 @@ This phase establishes deterministic, cacheable source-to-artifact conversion fo
 - `GltfSceneArtifact` stores hierarchy, local transforms, triangle primitives, tangent channels, PBR material metadata and source texture URIs.
 - `GltfSceneImporter` accepts glTF 2.0 JSON and GLB, resolves embedded or sibling buffers through a pinned cgltf revision, rejects unsupported primitive modes and validates all generated geometry.
 - `RegisterBuiltinImporters` publishes exact importer identities for reproducible project loading.
+- `PipelinePublish` validates cross-DCC `kairo.publish.v1` bundles and registers
+  immutable Blender glTF scene outputs with the engine asset registry.
 
 ## Artifact contracts
 
@@ -29,4 +31,6 @@ The glTF scene artifact deliberately preserves texture URIs instead of silently 
 - Texture, material and glTF artifacts round-trip byte-for-byte through their typed parsers.
 - A data-URI glTF scene imports with hierarchy, transforms, normals, UVs and indices intact.
 - Malformed dimensions, non-finite values, invalid references and unsafe record counts fail before cache publication.
+- Mutated, missing, symlinked, escaping, duplicated, or structurally loose DCC
+  publish payloads fail before engine registration.
 - Component tests run on Ubuntu Clang, macOS Clang and Windows MSVC.
