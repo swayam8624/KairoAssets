@@ -52,6 +52,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     GltfImporter.cppm
     GLBImporter.cppm
     BuiltinImporters.cppm
+    PipelinePublish.cppm
     AssetMetadata.cppm
     AssetRegistry.cppm
     AssetManifest.cppm
@@ -81,6 +82,7 @@ if(KAIRO_ASSETS_BUILD_TESTS)
         tests/AdvancedModelingOperationsTests.cpp
         tests/AuthoringDocumentTests.cpp
         tests/SculptProductionTests.cpp)
+    target_sources(KairoAssetsTests PRIVATE tests/PipelinePublishTests.cpp)
     target_link_libraries(KairoAssetsTests PRIVATE
         KairoAssets Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
     add_executable(KairoAssetsPhase2Tests tests/Phase2AssetTests.cpp)

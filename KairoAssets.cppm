@@ -28,6 +28,7 @@ export import Kairo.Assets.TextureImporter;
 export import Kairo.Assets.GltfImporter;
 export import Kairo.Assets.GLBImporter;
 export import Kairo.Assets.BuiltinImporters;
+export import Kairo.Assets.PipelinePublish;
 export import Kairo.Assets.Metadata;
 export import Kairo.Assets.Registry;
 export import Kairo.Assets.Manifest;
