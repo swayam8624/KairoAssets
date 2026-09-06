@@ -84,6 +84,15 @@ namespace
         return scene;
     }
 
+    void StripV2NodeStateForLegacy(GltfNodeData& node)
+    {
+        node.SkinIndex = GltfMissingIndex;
+        node.HasRestTRS = false;
+        node.RestTranslation = {};
+        node.RestRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+        node.RestScale = { 1.0f, 1.0f, 1.0f };
+    }
+
     [[nodiscard]] std::vector<std::byte> LegacyV1Payload(const GltfSceneArtifactData& source)
     {
         BinaryWriter writer;
@@ -135,13 +144,9 @@ TEST_CASE("glTF scene parser remains compatible with v1 static payloads")
     source.Skins.clear();
     source.Animations.clear();
     source.Primitives[0].Skinning.clear();
-    source.Nodes[1].SkinIndex = GltfMissingIndex;
     source.Nodes.erase(source.Nodes.begin());
     source.Nodes[0].Parent = -1;
-    source.Nodes[0].HasRestTRS = false;
-    source.Nodes[0].RestTranslation = {};
-    source.Nodes[0].RestRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
-    source.Nodes[0].RestScale = { 1.0f, 1.0f, 1.0f };
+    StripV2NodeStateForLegacy(source.Nodes[0]);
     source.RootNodes = { 0u };
 
     const auto payload = LegacyV1Payload(source);
@@ -178,6 +183,7 @@ TEST_CASE("glTF scene rejects ambiguous or non-monotonic animation channels")
     scene.Animations[0].Channels.push_back(scene.Animations[0].Channels[0]);
     REQUIRE_THROWS_AS(ValidateGltfSceneArtifactData(scene), std::invalid_argument);
 }
+
 TEST_CASE("glTF derived artifact rejects envelope and payload version mismatch")
 {
     const auto scene = AnimatedScene();
@@ -189,19 +195,14 @@ TEST_CASE("glTF derived artifact rejects envelope and payload version mismatch")
     staticScene.Skins.clear();
     staticScene.Animations.clear();
     staticScene.Primitives[0].Skinning.clear();
-    staticScene.Nodes[1].SkinIndex = GltfMissingIndex;
     staticScene.Nodes.erase(staticScene.Nodes.begin());
     staticScene.Nodes[0].Parent = -1;
-    staticScene.Nodes[0].HasRestTRS = false;
-    staticScene.Nodes[0].RestTranslation = {};
-    staticScene.Nodes[0].RestRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
-    staticScene.Nodes[0].RestScale = { 1.0f, 1.0f, 1.0f };
+    StripV2NodeStateForLegacy(staticScene.Nodes[0]);
     staticScene.RootNodes = { 0u };
     const auto v1Payload = LegacyV1Payload(staticScene);
     const DerivedArtifact falseV2{ AssetType::Scene, 2u, "kairo.gltf-scene.v2", v1Payload };
     REQUIRE_THROWS_AS(ParseGltfSceneDerivedArtifact(falseV2), std::invalid_argument);
 }
-
 
 TEST_CASE("legacy glTF v1 serializer publishes exact static schema")
 {
@@ -209,9 +210,9 @@ TEST_CASE("legacy glTF v1 serializer publishes exact static schema")
     scene.Skins.clear();
     scene.Animations.clear();
     scene.Primitives[0].Skinning.clear();
-    scene.Nodes[1].SkinIndex = GltfMissingIndex;
     scene.Nodes.erase(scene.Nodes.begin());
     scene.Nodes[0].Parent = -1;
+    StripV2NodeStateForLegacy(scene.Nodes[0]);
     scene.RootNodes = { 0u };
 
     const auto payload = SerializeGltfSceneArtifactDataV1(scene);
