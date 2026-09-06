@@ -1,0 +1,27 @@
+name: Preserve glTF Rest Pose
+
+on:
+  push:
+    branches:
+      - feature/gltf-animation-v2
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve source rest pose
+        run: python3 .github/scripts/add_gltf_rest_pose.py
+      - name: Commit rest pose contract
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Assets: preserve glTF animation rest TRS pose"
+          git push
