@@ -8,6 +8,8 @@ The payload family keeps the existing `KGLTF001` magic and uses an explicit payl
 
 The derived artifact envelope is stricter: `kairo.gltf-scene.v1` / format version 1 must wrap a payload-v1 body, while `kairo.gltf-scene.v2` / format version 2 must wrap payload v2. This prevents cache or provenance metadata from claiming one schema while carrying another.
 
+The built-in importer registry preserves both `kairo.gltf.scene@1` and `kairo.gltf.scene@2`. Version 1 remains available for old import records and publishes the exact static v1 binary schema. It rejects skinning or animation instead of silently dropping v2-only semantics. Version 2 is the current importer and publishes the extended artifact. Keeping both identities means old provenance/cache keys remain reproducible after the v2 upgrade.
+
 ## Skinning
 
 Each skinned primitive stores exactly four joint indices and four weights per vertex in `GltfVertexSkinData`. `GltfSceneImporter` reads glTF `JOINTS_0` and `WEIGHTS_0`, accepts unsigned-byte/unsigned-short joints and FLOAT or normalized unsigned weights, and canonicalizes the four weights to sum to one.
