@@ -22,6 +22,8 @@ Scene artifact v2 intentionally supports one four-influence set. `JOINTS_1` / `W
 
 ## Animation
 
+For nodes authored with glTF TRS properties, v2 also preserves `RestTranslation`, `RestRotation`, and `RestScale` plus a `HasRestTRS` marker. Animated targets are required to have this rest pose. This is deliberate: a clip often animates only one of translation/rotation/scale, and reconstructing the untouched properties later from the composed matrix is lossy or ambiguous under negative scale. Matrix-authored static nodes keep `HasRestTRS == false` and canonical unused rest fields.
+
 `GltfAnimationClipData` contains node-targeted channels. V2 preserves three transform paths:
 
 - translation — three-component values

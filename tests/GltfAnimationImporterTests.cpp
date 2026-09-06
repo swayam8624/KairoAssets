@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -140,6 +141,10 @@ TEST_CASE("glTF scene importer preserves skinning and TRS animation")
     CHECK(scene.Animations[0].Name == "Move");
     REQUIRE(scene.Animations[0].Channels.size() == 1u);
     CHECK(scene.Animations[0].Channels[0].TargetNode == 1u);
+    REQUIRE(scene.Nodes[1].HasRestTRS);
+    CHECK(scene.Nodes[1].RestTranslation == std::array<float, 3u>{ 0.0f, 0.0f, 0.0f });
+    CHECK(scene.Nodes[1].RestRotation == std::array<float, 4u>{ 0.0f, 0.0f, 0.0f, 1.0f });
+    CHECK(scene.Nodes[1].RestScale == std::array<float, 3u>{ 1.0f, 1.0f, 1.0f });
     CHECK(scene.Animations[0].Channels[0].Path == GltfAnimationPath::Translation);
     REQUIRE(scene.Animations[0].Channels[0].Keyframes.size() == 2u);
     CHECK(scene.Animations[0].Channels[0].Keyframes[1].Value[0] == 1.0f);

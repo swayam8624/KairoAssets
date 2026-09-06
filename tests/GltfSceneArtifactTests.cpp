@@ -50,10 +50,12 @@ namespace
 
         GltfNodeData root;
         root.Name = "RootJoint";
+        root.HasRestTRS = true;
         scene.Nodes.push_back(root);
 
         GltfNodeData meshNode;
         meshNode.Name = "Character";
+        meshNode.HasRestTRS = true;
         meshNode.Parent = 0;
         meshNode.PrimitiveIndices = { 0u };
         meshNode.SkinIndex = 0u;
@@ -136,6 +138,10 @@ TEST_CASE("glTF scene parser remains compatible with v1 static payloads")
     source.Nodes[1].SkinIndex = GltfMissingIndex;
     source.Nodes.erase(source.Nodes.begin());
     source.Nodes[0].Parent = -1;
+    source.Nodes[0].HasRestTRS = false;
+    source.Nodes[0].RestTranslation = {};
+    source.Nodes[0].RestRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+    source.Nodes[0].RestScale = { 1.0f, 1.0f, 1.0f };
     source.RootNodes = { 0u };
 
     const auto payload = LegacyV1Payload(source);
@@ -186,6 +192,10 @@ TEST_CASE("glTF derived artifact rejects envelope and payload version mismatch")
     staticScene.Nodes[1].SkinIndex = GltfMissingIndex;
     staticScene.Nodes.erase(staticScene.Nodes.begin());
     staticScene.Nodes[0].Parent = -1;
+    staticScene.Nodes[0].HasRestTRS = false;
+    staticScene.Nodes[0].RestTranslation = {};
+    staticScene.Nodes[0].RestRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+    staticScene.Nodes[0].RestScale = { 1.0f, 1.0f, 1.0f };
     staticScene.RootNodes = { 0u };
     const auto v1Payload = LegacyV1Payload(staticScene);
     const DerivedArtifact falseV2{ AssetType::Scene, 2u, "kairo.gltf-scene.v2", v1Payload };

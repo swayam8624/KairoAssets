@@ -447,6 +447,22 @@ export namespace kairo::assets
                     node.Parent = static_cast<std::int32_t>(parentIndex);
                 }
                 cgltf_node_transform_local(&source, node.LocalTransform.data());
+                if (source.has_matrix == 0)
+                {
+                    node.HasRestTRS = true;
+                    if (source.has_translation != 0)
+                        for (std::size_t axis = 0u; axis < 3u; ++axis)
+                            node.RestTranslation[axis] = source.translation[axis];
+                    if (source.has_rotation != 0)
+                    {
+                        for (std::size_t component = 0u; component < 4u; ++component)
+                            node.RestRotation[component] = source.rotation[component];
+                        NormalizeQuaternion(node.RestRotation);
+                    }
+                    if (source.has_scale != 0)
+                        for (std::size_t axis = 0u; axis < 3u; ++axis)
+                            node.RestScale[axis] = source.scale[axis];
+                }
                 if (source.mesh != nullptr)
                 {
                     const std::ptrdiff_t meshIndex = source.mesh - parsed->meshes;

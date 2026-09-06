@@ -150,6 +150,10 @@ export namespace kairo::assets
             0.0f, 0.0f, 0.0f, 1.0f };
         std::vector<std::uint32_t> PrimitiveIndices;
         std::uint32_t SkinIndex = GltfMissingIndex;
+        bool HasRestTRS = false;
+        std::array<float, 3u> RestTranslation{};
+        std::array<float, 4u> RestRotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+        std::array<float, 3u> RestScale{ 1.0f, 1.0f, 1.0f };
 
         friend bool operator==(const GltfNodeData&, const GltfNodeData&) = default;
     };
@@ -332,6 +336,25 @@ export namespace kairo::assets
                 if (node.PrimitiveIndices.empty())
                     throw std::invalid_argument("A glTF skin binding requires a mesh-bearing node.");
             }
+            if (node.HasRestTRS)
+            {
+                if (!Finite(node.RestTranslation) || !Finite(node.RestRotation) ||
+                    !Finite(node.RestScale))
+                    throw std::invalid_argument("glTF node rest TRS values must be finite.");
+                float rotationLengthSquared = 0.0f;
+                for (float value : node.RestRotation)
+                    rotationLengthSquared += value * value;
+                if (std::abs(rotationLengthSquared - 1.0f) > 1.0e-3f)
+                    throw std::invalid_argument(
+                        "glTF node rest rotation must contain a unit quaternion.");
+            }
+            else if (node.RestTranslation != std::array<float, 3u>{} ||
+                node.RestRotation != std::array<float, 4u>{ 0.0f, 0.0f, 0.0f, 1.0f } ||
+                node.RestScale != std::array<float, 3u>{ 1.0f, 1.0f, 1.0f })
+            {
+                throw std::invalid_argument(
+                    "Matrix-authored glTF nodes must keep canonical unused rest TRS fields.");
+            }
         }
         for (const std::uint32_t root : scene.RootNodes)
         {
@@ -409,6 +432,9 @@ export namespace kairo::assets
                 const GltfAnimationChannelData& channel = clip.Channels[channelIndex];
                 if (channel.TargetNode >= scene.Nodes.size())
                     throw std::out_of_range("glTF animation target node index is invalid.");
+                if (!scene.Nodes[channel.TargetNode].HasRestTRS)
+                    throw std::invalid_argument(
+                        "glTF animation targets require a preserved rest TRS pose.");
                 switch (channel.Path)
                 {
                     case GltfAnimationPath::Translation:
@@ -586,6 +612,10 @@ export namespace kairo::assets
             writer.WriteU32(static_cast<std::uint32_t>(node.PrimitiveIndices.size()));
             for (const std::uint32_t primitive : node.PrimitiveIndices) writer.WriteU32(primitive);
             writer.WriteU32(node.SkinIndex);
+            writer.WriteU8(node.HasRestTRS ? 1u : 0u);
+            for (float value : node.RestTranslation) writer.WriteF32(value);
+            for (float value : node.RestRotation) writer.WriteF32(value);
+            for (float value : node.RestScale) writer.WriteF32(value);
         }
         for (const std::uint32_t root : scene.RootNodes) writer.WriteU32(root);
 
@@ -716,7 +746,17 @@ export namespace kairo::assets
             node.PrimitiveIndices.resize(nodePrimitiveCount);
             for (std::uint32_t& primitive : node.PrimitiveIndices)
                 primitive = reader.ReadU32();
-            if (payloadVersion >= PayloadVersion) node.SkinIndex = reader.ReadU32();
+            if (payloadVersion >= PayloadVersion)
+            {
+                node.SkinIndex = reader.ReadU32();
+                const std::uint8_t hasRestTRS = reader.ReadU8();
+                if (hasRestTRS > 1u)
+                    throw std::invalid_argument("glTF node rest TRS flag is invalid.");
+                node.HasRestTRS = hasRestTRS != 0u;
+                for (float& value : node.RestTranslation) value = reader.ReadF32();
+                for (float& value : node.RestRotation) value = reader.ReadF32();
+                for (float& value : node.RestScale) value = reader.ReadF32();
+            }
             scene.Nodes.push_back(std::move(node));
         }
         for (std::uint32_t index = 0u; index < rootCount; ++index)
