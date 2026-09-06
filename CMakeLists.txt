@@ -76,6 +76,8 @@ if(KAIRO_ASSETS_BUILD_TESTS)
         tests/AssetTests.cpp
         tests/TextureArtifactTests.cpp
         tests/MaterialArtifactTests.cpp
+        tests/GltfSceneArtifactTests.cpp
+        tests/GltfAnimationImporterTests.cpp
         tests/GLBImporterTests.cpp
         tests/AuthoringMeshTests.cpp
         tests/AuthoringCompletionTests.cpp

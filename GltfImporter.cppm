@@ -144,11 +144,64 @@ export namespace kairo::assets
             for (float& component : value) component /= length;
         }
 
+        inline void NormalizeQuaternion(std::array<float, 4u>& value)
+        {
+            float lengthSquared = 0.0f;
+            for (float component : value)
+            {
+                if (!std::isfinite(component))
+                    throw std::invalid_argument("glTF rotation quaternion must be finite.");
+                lengthSquared += component * component;
+            }
+            if (lengthSquared <= std::numeric_limits<float>::epsilon())
+                throw std::invalid_argument("glTF rotation quaternion cannot be zero length.");
+            const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+            for (float& component : value) component *= inverseLength;
+        }
+
+        [[nodiscard]] inline GltfAnimationPath ConvertAnimationPath(
+            cgltf_animation_path_type path)
+        {
+            switch (path)
+            {
+                case cgltf_animation_path_type_translation:
+                    return GltfAnimationPath::Translation;
+                case cgltf_animation_path_type_rotation:
+                    return GltfAnimationPath::Rotation;
+                case cgltf_animation_path_type_scale:
+                    return GltfAnimationPath::Scale;
+                case cgltf_animation_path_type_weights:
+                    throw std::invalid_argument(
+                        "glTF morph-weight animation is not supported by scene artifact v2.");
+                default:
+                    throw std::invalid_argument("glTF animation path is unsupported.");
+            }
+        }
+
+        [[nodiscard]] inline GltfAnimationInterpolation ConvertInterpolation(
+            cgltf_interpolation_type interpolation)
+        {
+            switch (interpolation)
+            {
+                case cgltf_interpolation_type_linear:
+                    return GltfAnimationInterpolation::Linear;
+                case cgltf_interpolation_type_step:
+                    return GltfAnimationInterpolation::Step;
+                case cgltf_interpolation_type_cubic_spline:
+                    return GltfAnimationInterpolation::CubicSpline;
+                default:
+                    throw std::invalid_argument("glTF animation interpolation is unsupported.");
+            }
+        }
+
         [[nodiscard]] inline GltfPrimitiveData ConvertPrimitive(
             const cgltf_data& data, const cgltf_primitive& source)
         {
             if (source.type != cgltf_primitive_type_triangles)
                 throw std::invalid_argument("Only glTF triangle-list primitives are supported.");
+            if (source.targets_count != 0u)
+                throw std::invalid_argument(
+                    "glTF morph targets are not supported by scene artifact v2.");
 
             const cgltf_accessor* positions =
                 FindAttribute(source, cgltf_attribute_type_position);
@@ -164,6 +217,33 @@ export namespace kairo::assets
                 FindAttribute(source, cgltf_attribute_type_texcoord, 0);
             const cgltf_accessor* tangents =
                 FindAttribute(source, cgltf_attribute_type_tangent);
+            const cgltf_accessor* joints =
+                FindAttribute(source, cgltf_attribute_type_joints, 0);
+            const cgltf_accessor* weights =
+                FindAttribute(source, cgltf_attribute_type_weights, 0);
+            if (FindAttribute(source, cgltf_attribute_type_joints, 1) != nullptr ||
+                FindAttribute(source, cgltf_attribute_type_weights, 1) != nullptr)
+                throw std::invalid_argument(
+                    "glTF scene artifact v2 supports at most four skin influences per vertex.");
+            if ((joints == nullptr) != (weights == nullptr))
+                throw std::invalid_argument(
+                    "glTF primitive must provide JOINTS_0 and WEIGHTS_0 together.");
+            if (joints != nullptr)
+            {
+                if (joints->type != cgltf_type_vec4 || joints->count != positions->count ||
+                    (joints->component_type != cgltf_component_type_r_8u &&
+                     joints->component_type != cgltf_component_type_r_16u))
+                    throw std::invalid_argument(
+                        "glTF JOINTS_0 must be an UNSIGNED_BYTE/UNSIGNED_SHORT VEC4 matching POSITION.");
+                const bool floatWeights = weights->component_type == cgltf_component_type_r_32f;
+                const bool normalizedIntegerWeights = weights->normalized != 0 &&
+                    (weights->component_type == cgltf_component_type_r_8u ||
+                     weights->component_type == cgltf_component_type_r_16u);
+                if (weights->type != cgltf_type_vec4 || weights->count != positions->count ||
+                    (!floatWeights && !normalizedIntegerWeights))
+                    throw std::invalid_argument(
+                        "glTF WEIGHTS_0 must be FLOAT or normalized unsigned VEC4 matching POSITION.");
+            }
             if (normals != nullptr && (normals->type != cgltf_type_vec3 ||
                 normals->count != positions->count))
                 throw std::invalid_argument("glTF NORMAL accessor must match POSITION.");
@@ -180,6 +260,8 @@ export namespace kairo::assets
             primitive.Mesh.Vertices.resize(static_cast<std::size_t>(positions->count));
             if (tangents != nullptr)
                 primitive.Tangents.resize(static_cast<std::size_t>(positions->count));
+            if (joints != nullptr)
+                primitive.Skinning.resize(static_cast<std::size_t>(positions->count));
 
             for (cgltf_size vertexIndex = 0u; vertexIndex < positions->count; ++vertexIndex)
             {
@@ -203,6 +285,27 @@ export namespace kairo::assets
                     tangent[1] = direction[1];
                     tangent[2] = direction[2];
                     tangent[3] = tangent[3] < 0.0f ? -1.0f : 1.0f;
+                }
+                if (joints != nullptr)
+                {
+                    auto& influence = primitive.Skinning[static_cast<std::size_t>(vertexIndex)];
+                    std::array<cgltf_uint, 4u> jointValues{};
+                    if (cgltf_accessor_read_uint(joints, vertexIndex,
+                        jointValues.data(), jointValues.size()) == 0)
+                        throw std::invalid_argument("Unable to read glTF JOINTS_0 accessor.");
+                    for (std::size_t slot = 0u; slot < influence.Joints.size(); ++slot)
+                        influence.Joints[slot] = static_cast<std::uint32_t>(jointValues[slot]);
+                    ReadVector(*weights, vertexIndex, influence.Weights.data(), 4u, "skin weight");
+                    float total = 0.0f;
+                    for (float weight : influence.Weights)
+                    {
+                        if (weight < 0.0f)
+                            throw std::invalid_argument("glTF skin weights cannot be negative.");
+                        total += weight;
+                    }
+                    if (!std::isfinite(total) || total <= std::numeric_limits<float>::epsilon())
+                        throw std::invalid_argument("glTF skin weights must contain a non-zero influence.");
+                    for (float& weight : influence.Weights) weight /= total;
                 }
             }
 
@@ -268,7 +371,7 @@ export namespace kairo::assets
     {
     public:
         [[nodiscard]] std::string Identifier() const override { return "kairo.gltf.scene"; }
-        [[nodiscard]] std::string Version() const override { return "1"; }
+        [[nodiscard]] std::string Version() const override { return "2"; }
 
         [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
         {
@@ -301,7 +404,9 @@ export namespace kairo::assets
             if (parsed->meshes_count == 0u)
                 throw std::invalid_argument("glTF scene does not contain meshes.");
             if (parsed->materials_count > std::numeric_limits<std::uint32_t>::max() ||
-                parsed->nodes_count > std::numeric_limits<std::uint32_t>::max())
+                parsed->nodes_count > std::numeric_limits<std::uint32_t>::max() ||
+                parsed->skins_count > std::numeric_limits<std::uint32_t>::max() ||
+                parsed->animations_count > std::numeric_limits<std::uint32_t>::max())
                 throw std::length_error("glTF scene exceeds 32-bit addressing.");
 
             GltfSceneArtifactData scene;
@@ -342,6 +447,22 @@ export namespace kairo::assets
                     node.Parent = static_cast<std::int32_t>(parentIndex);
                 }
                 cgltf_node_transform_local(&source, node.LocalTransform.data());
+                if (source.has_matrix == 0)
+                {
+                    node.HasRestTRS = true;
+                    if (source.has_translation != 0)
+                        for (std::size_t axis = 0u; axis < 3u; ++axis)
+                            node.RestTranslation[axis] = source.translation[axis];
+                    if (source.has_rotation != 0)
+                    {
+                        for (std::size_t component = 0u; component < 4u; ++component)
+                            node.RestRotation[component] = source.rotation[component];
+                        NormalizeQuaternion(node.RestRotation);
+                    }
+                    if (source.has_scale != 0)
+                        for (std::size_t axis = 0u; axis < 3u; ++axis)
+                            node.RestScale[axis] = source.scale[axis];
+                }
                 if (source.mesh != nullptr)
                 {
                     const std::ptrdiff_t meshIndex = source.mesh - parsed->meshes;
@@ -351,6 +472,138 @@ export namespace kairo::assets
                     node.PrimitiveIndices =
                         meshPrimitives[static_cast<std::size_t>(meshIndex)];
                 }
+                if (source.skin != nullptr)
+                {
+                    const std::ptrdiff_t skinIndex = source.skin - parsed->skins;
+                    if (skinIndex < 0 ||
+                        static_cast<cgltf_size>(skinIndex) >= parsed->skins_count)
+                        throw std::out_of_range("glTF node skin pointer is invalid.");
+                    node.SkinIndex = static_cast<std::uint32_t>(skinIndex);
+                }
+            }
+
+            scene.Skins.reserve(parsed->skins_count);
+            for (cgltf_size skinIndex = 0u; skinIndex < parsed->skins_count; ++skinIndex)
+            {
+                const cgltf_skin& source = parsed->skins[skinIndex];
+                if (source.joints_count == 0u ||
+                    source.joints_count > std::numeric_limits<std::uint32_t>::max())
+                    throw std::length_error("glTF skin joint count is outside the supported range.");
+                GltfSkinData skin;
+                if (source.name != nullptr) skin.Name = source.name;
+                if (source.skeleton != nullptr)
+                {
+                    const std::ptrdiff_t skeletonIndex = source.skeleton - parsed->nodes;
+                    if (skeletonIndex < 0 ||
+                        static_cast<cgltf_size>(skeletonIndex) >= parsed->nodes_count)
+                        throw std::out_of_range("glTF skeleton root pointer is invalid.");
+                    skin.SkeletonRoot = static_cast<std::uint32_t>(skeletonIndex);
+                }
+                skin.Joints.resize(source.joints_count);
+                skin.InverseBindMatrices.resize(source.joints_count);
+                for (cgltf_size joint = 0u; joint < source.joints_count; ++joint)
+                {
+                    const std::ptrdiff_t nodeIndex = source.joints[joint] - parsed->nodes;
+                    if (nodeIndex < 0 ||
+                        static_cast<cgltf_size>(nodeIndex) >= parsed->nodes_count)
+                        throw std::out_of_range("glTF skin joint pointer is invalid.");
+                    skin.Joints[static_cast<std::size_t>(joint)] =
+                        static_cast<std::uint32_t>(nodeIndex);
+                    auto& inverse = skin.InverseBindMatrices[static_cast<std::size_t>(joint)];
+                    inverse = {
+                        1.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 1.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 1.0f };
+                }
+                if (source.inverse_bind_matrices != nullptr)
+                {
+                    if (source.inverse_bind_matrices->type != cgltf_type_mat4 ||
+                        source.inverse_bind_matrices->component_type != cgltf_component_type_r_32f ||
+                        source.inverse_bind_matrices->count != source.joints_count)
+                        throw std::invalid_argument(
+                            "glTF inverseBindMatrices must be a FLOAT MAT4 accessor matching the joint count.");
+                    for (cgltf_size joint = 0u; joint < source.joints_count; ++joint)
+                        ReadVector(*source.inverse_bind_matrices, joint,
+                            skin.InverseBindMatrices[static_cast<std::size_t>(joint)].data(),
+                            16u, "inverse-bind matrix");
+                }
+                scene.Skins.push_back(std::move(skin));
+            }
+
+            scene.Animations.reserve(parsed->animations_count);
+            for (cgltf_size animationIndex = 0u;
+                animationIndex < parsed->animations_count; ++animationIndex)
+            {
+                const cgltf_animation& sourceAnimation = parsed->animations[animationIndex];
+                if (sourceAnimation.channels_count == 0u ||
+                    sourceAnimation.channels_count > std::numeric_limits<std::uint32_t>::max())
+                    throw std::length_error(
+                        "glTF animation channel count is outside the supported range.");
+                GltfAnimationClipData clip;
+                if (sourceAnimation.name != nullptr) clip.Name = sourceAnimation.name;
+                clip.Channels.reserve(sourceAnimation.channels_count);
+                for (cgltf_size channelIndex = 0u;
+                    channelIndex < sourceAnimation.channels_count; ++channelIndex)
+                {
+                    const cgltf_animation_channel& sourceChannel =
+                        sourceAnimation.channels[channelIndex];
+                    if (sourceChannel.sampler == nullptr || sourceChannel.target_node == nullptr ||
+                        sourceChannel.sampler->input == nullptr || sourceChannel.sampler->output == nullptr)
+                        throw std::invalid_argument("glTF animation channel is incomplete.");
+
+                    const std::ptrdiff_t targetIndex = sourceChannel.target_node - parsed->nodes;
+                    if (targetIndex < 0 ||
+                        static_cast<cgltf_size>(targetIndex) >= parsed->nodes_count)
+                        throw std::out_of_range("glTF animation target node pointer is invalid.");
+
+                    GltfAnimationChannelData channel;
+                    channel.TargetNode = static_cast<std::uint32_t>(targetIndex);
+                    channel.Path = ConvertAnimationPath(sourceChannel.target_path);
+                    channel.Interpolation = ConvertInterpolation(sourceChannel.sampler->interpolation);
+                    const cgltf_accessor& input = *sourceChannel.sampler->input;
+                    const cgltf_accessor& output = *sourceChannel.sampler->output;
+                    if (input.type != cgltf_type_scalar ||
+                        input.component_type != cgltf_component_type_r_32f || input.count == 0u)
+                        throw std::invalid_argument(
+                            "glTF animation input must be a non-empty FLOAT SCALAR accessor.");
+                    const cgltf_type expectedType = channel.Path == GltfAnimationPath::Rotation
+                        ? cgltf_type_vec4 : cgltf_type_vec3;
+                    if (output.type != expectedType ||
+                        output.component_type != cgltf_component_type_r_32f)
+                        throw std::invalid_argument(
+                            "glTF animation output accessor type does not match its target path.");
+                    const bool cubic = channel.Interpolation == GltfAnimationInterpolation::CubicSpline;
+                    if (cubic && input.count > std::numeric_limits<cgltf_size>::max() / 3u)
+                        throw std::length_error("glTF cubic animation key count overflows addressing.");
+                    const cgltf_size expectedOutputCount = cubic ? input.count * 3u : input.count;
+                    if (output.count != expectedOutputCount)
+                        throw std::invalid_argument(
+                            "glTF animation output count does not match its input sampler.");
+
+                    channel.Keyframes.resize(input.count);
+                    const cgltf_size components = channel.Path == GltfAnimationPath::Rotation ? 4u : 3u;
+                    for (cgltf_size keyIndex = 0u; keyIndex < input.count; ++keyIndex)
+                    {
+                        GltfAnimationKeyframe& key =
+                            channel.Keyframes[static_cast<std::size_t>(keyIndex)];
+                        ReadVector(input, keyIndex, &key.TimeSeconds, 1u, "animation time");
+                        const cgltf_size valueIndex = cubic ? keyIndex * 3u + 1u : keyIndex;
+                        ReadVector(output, valueIndex, key.Value.data(), components,
+                            "animation value");
+                        if (cubic)
+                        {
+                            ReadVector(output, keyIndex * 3u, key.InTangent.data(), components,
+                                "animation in tangent");
+                            ReadVector(output, keyIndex * 3u + 2u, key.OutTangent.data(), components,
+                                "animation out tangent");
+                        }
+                        if (channel.Path == GltfAnimationPath::Rotation)
+                            NormalizeQuaternion(key.Value);
+                    }
+                    clip.Channels.push_back(std::move(channel));
+                }
+                scene.Animations.push_back(std::move(clip));
             }
 
             const cgltf_scene* activeScene = parsed->scene;
@@ -377,6 +630,37 @@ export namespace kairo::assets
 
             ValidateGltfSceneArtifactData(scene);
             return MakeGltfSceneDerivedArtifact(scene);
+        }
+    };
+
+
+    /// Frozen compatibility identity for projects/import records authored before
+    /// skinning/animation artifact v2. Static source decoding reuses the current
+    /// validated parser, but publication is forced back through the exact v1
+    /// binary schema. Any v2-only semantics fail instead of being discarded.
+    class GltfSceneImporterV1 final : public AssetImporter
+    {
+    public:
+        [[nodiscard]] std::string Identifier() const override { return "kairo.gltf.scene"; }
+        [[nodiscard]] std::string Version() const override { return "1"; }
+
+        [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
+        {
+            GltfSceneImporter latest;
+            const GltfSceneArtifactData scene =
+                ParseGltfSceneDerivedArtifact(latest.Import(request));
+            if (!scene.Skins.empty() || !scene.Animations.empty())
+                throw std::invalid_argument(
+                    "kairo.gltf.scene@1 supports static glTF scenes only.");
+            for (const GltfPrimitiveData& primitive : scene.Primitives)
+                if (!primitive.Skinning.empty())
+                    throw std::invalid_argument(
+                        "kairo.gltf.scene@1 cannot preserve vertex skinning.");
+            for (const GltfNodeData& node : scene.Nodes)
+                if (node.SkinIndex != GltfMissingIndex)
+                    throw std::invalid_argument(
+                        "kairo.gltf.scene@1 cannot preserve node skin bindings.");
+            return MakeGltfSceneDerivedArtifactV1(scene);
         }
     };
 }

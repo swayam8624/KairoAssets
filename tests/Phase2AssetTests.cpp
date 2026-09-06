@@ -150,8 +150,9 @@ TEST_CASE("Built-in importer registry exposes exact reproducible identities")
     using namespace kairo::assets;
     ImporterRegistry registry;
     RegisterBuiltinImporters(registry);
-    CHECK(registry.Size() == 4u);
+    CHECK(registry.Size() == 5u);
     CHECK(registry.Contains("kairo.obj", "1"));
     CHECK(registry.Contains("kairo.texture.stb", "1"));
     CHECK(registry.Contains("kairo.gltf.scene", "1"));
+    CHECK(registry.Contains("kairo.gltf.scene", "2"));
 }

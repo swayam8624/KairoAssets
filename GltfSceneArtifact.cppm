@@ -57,11 +57,84 @@ export namespace kairo::assets
         friend bool operator==(const GltfMaterialData&, const GltfMaterialData&) = default;
     };
 
+    inline constexpr std::uint32_t GltfMissingIndex =
+        std::numeric_limits<std::uint32_t>::max();
+
+    struct GltfVertexSkinData final
+    {
+        std::array<std::uint32_t, 4u> Joints{};
+        std::array<float, 4u> Weights{};
+
+        friend bool operator==(const GltfVertexSkinData&, const GltfVertexSkinData&) = default;
+    };
+
+    enum class GltfAnimationPath : std::uint8_t
+    {
+        Translation = 1u,
+        Rotation = 2u,
+        Scale = 3u
+    };
+
+    enum class GltfAnimationInterpolation : std::uint8_t
+    {
+        Linear = 1u,
+        Step = 2u,
+        CubicSpline = 3u
+    };
+
+    struct GltfAnimationKeyframe final
+    {
+        float TimeSeconds = 0.0f;
+        std::array<float, 4u> Value{};
+        std::array<float, 4u> InTangent{};
+        std::array<float, 4u> OutTangent{};
+
+        friend bool operator==(const GltfAnimationKeyframe&, const GltfAnimationKeyframe&) = default;
+    };
+
+    struct GltfAnimationChannelData final
+    {
+        std::uint32_t TargetNode = GltfMissingIndex;
+        GltfAnimationPath Path = GltfAnimationPath::Translation;
+        GltfAnimationInterpolation Interpolation = GltfAnimationInterpolation::Linear;
+        std::vector<GltfAnimationKeyframe> Keyframes;
+
+        friend bool operator==(const GltfAnimationChannelData&, const GltfAnimationChannelData&) = default;
+    };
+
+    struct GltfAnimationClipData final
+    {
+        std::string Name;
+        std::vector<GltfAnimationChannelData> Channels;
+
+        [[nodiscard]] float DurationSeconds() const noexcept
+        {
+            float duration = 0.0f;
+            for (const auto& channel : Channels)
+                if (!channel.Keyframes.empty())
+                    duration = std::max(duration, channel.Keyframes.back().TimeSeconds);
+            return duration;
+        }
+
+        friend bool operator==(const GltfAnimationClipData&, const GltfAnimationClipData&) = default;
+    };
+
+    struct GltfSkinData final
+    {
+        std::string Name;
+        std::uint32_t SkeletonRoot = GltfMissingIndex;
+        std::vector<std::uint32_t> Joints;
+        std::vector<std::array<float, 16u>> InverseBindMatrices;
+
+        friend bool operator==(const GltfSkinData&, const GltfSkinData&) = default;
+    };
+
     struct GltfPrimitiveData final
     {
         MeshArtifactData Mesh;
         std::vector<std::array<float, 4u>> Tangents;
-        std::uint32_t MaterialIndex = std::numeric_limits<std::uint32_t>::max();
+        std::uint32_t MaterialIndex = GltfMissingIndex;
+        std::vector<GltfVertexSkinData> Skinning;
 
         friend bool operator==(const GltfPrimitiveData&, const GltfPrimitiveData&) = default;
     };
@@ -76,6 +149,11 @@ export namespace kairo::assets
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f };
         std::vector<std::uint32_t> PrimitiveIndices;
+        std::uint32_t SkinIndex = GltfMissingIndex;
+        bool HasRestTRS = false;
+        std::array<float, 3u> RestTranslation{};
+        std::array<float, 4u> RestRotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+        std::array<float, 3u> RestScale{ 1.0f, 1.0f, 1.0f };
 
         friend bool operator==(const GltfNodeData&, const GltfNodeData&) = default;
     };
@@ -86,6 +164,8 @@ export namespace kairo::assets
         std::vector<GltfPrimitiveData> Primitives;
         std::vector<GltfNodeData> Nodes;
         std::vector<std::uint32_t> RootNodes;
+        std::vector<GltfSkinData> Skins;
+        std::vector<GltfAnimationClipData> Animations;
 
         friend bool operator==(const GltfSceneArtifactData&, const GltfSceneArtifactData&) = default;
     };
@@ -95,11 +175,12 @@ export namespace kairo::assets
         constexpr std::array<std::byte, 8u> Magic{
             std::byte{'K'}, std::byte{'G'}, std::byte{'L'}, std::byte{'T'},
             std::byte{'F'}, std::byte{'0'}, std::byte{'0'}, std::byte{'1'} };
-        constexpr std::uint32_t PayloadVersion = 1u;
+        constexpr std::uint32_t LegacyPayloadVersion = 1u;
+        constexpr std::uint32_t PayloadVersion = 2u;
         constexpr std::size_t MaximumNameBytes = 4096u;
         constexpr std::size_t MaximumUriBytes = 64u * 1024u;
         constexpr std::uint32_t MaximumRecords = 1'000'000u;
-        constexpr std::uint32_t MissingIndex = std::numeric_limits<std::uint32_t>::max();
+        constexpr std::uint32_t MissingIndex = GltfMissingIndex;
 
         inline void WriteString(BinaryWriter& writer, std::string_view value,
             std::size_t maximumBytes, const char* role)
@@ -146,7 +227,8 @@ export namespace kairo::assets
     {
         using namespace gltf_scene_artifact_detail;
         if (scene.Materials.size() > MaximumRecords || scene.Primitives.size() > MaximumRecords ||
-            scene.Nodes.size() > MaximumRecords || scene.RootNodes.size() > MaximumRecords)
+            scene.Nodes.size() > MaximumRecords || scene.RootNodes.size() > MaximumRecords ||
+            scene.Skins.size() > MaximumRecords || scene.Animations.size() > MaximumRecords)
             throw std::length_error("glTF scene exceeds its record safety limit.");
         if (scene.Primitives.empty())
             throw std::invalid_argument("glTF scene requires at least one triangle primitive.");
@@ -209,6 +291,27 @@ export namespace kairo::assets
             if (primitive.MaterialIndex != MissingIndex &&
                 primitive.MaterialIndex >= scene.Materials.size())
                 throw std::out_of_range("glTF primitive material index is invalid.");
+            if (!primitive.Skinning.empty())
+            {
+                if (primitive.Skinning.size() != primitive.Mesh.Vertices.size())
+                    throw std::invalid_argument(
+                        "glTF skin influence count must match the primitive vertex count.");
+                for (const GltfVertexSkinData& influence : primitive.Skinning)
+                {
+                    if (!Finite(influence.Weights))
+                        throw std::invalid_argument("glTF skin weights must be finite.");
+                    float total = 0.0f;
+                    for (float weight : influence.Weights)
+                    {
+                        if (weight < 0.0f)
+                            throw std::invalid_argument("glTF skin weights cannot be negative.");
+                        total += weight;
+                    }
+                    if (std::abs(total - 1.0f) > 1.0e-3f)
+                        throw std::invalid_argument(
+                            "glTF skin weights must sum to one for every skinned vertex.");
+                }
+            }
         }
 
         for (std::size_t nodeIndex = 0u; nodeIndex < scene.Nodes.size(); ++nodeIndex)
@@ -226,6 +329,32 @@ export namespace kairo::assets
             for (const std::uint32_t primitive : node.PrimitiveIndices)
                 if (primitive >= scene.Primitives.size())
                     throw std::out_of_range("glTF node primitive index is invalid.");
+            if (node.SkinIndex != MissingIndex)
+            {
+                if (node.SkinIndex >= scene.Skins.size())
+                    throw std::out_of_range("glTF node skin index is invalid.");
+                if (node.PrimitiveIndices.empty())
+                    throw std::invalid_argument("A glTF skin binding requires a mesh-bearing node.");
+            }
+            if (node.HasRestTRS)
+            {
+                if (!Finite(node.RestTranslation) || !Finite(node.RestRotation) ||
+                    !Finite(node.RestScale))
+                    throw std::invalid_argument("glTF node rest TRS values must be finite.");
+                float rotationLengthSquared = 0.0f;
+                for (float value : node.RestRotation)
+                    rotationLengthSquared += value * value;
+                if (std::abs(rotationLengthSquared - 1.0f) > 1.0e-3f)
+                    throw std::invalid_argument(
+                        "glTF node rest rotation must contain a unit quaternion.");
+            }
+            else if (node.RestTranslation != std::array<float, 3u>{} ||
+                node.RestRotation != std::array<float, 4u>{ 0.0f, 0.0f, 0.0f, 1.0f } ||
+                node.RestScale != std::array<float, 3u>{ 1.0f, 1.0f, 1.0f })
+            {
+                throw std::invalid_argument(
+                    "Matrix-authored glTF nodes must keep canonical unused rest TRS fields.");
+            }
         }
         for (const std::uint32_t root : scene.RootNodes)
         {
@@ -246,16 +375,133 @@ export namespace kairo::assets
                     throw std::invalid_argument("glTF node hierarchy contains a cycle.");
             }
         }
+
+        for (const GltfSkinData& skin : scene.Skins)
+        {
+            if (skin.Name.size() > MaximumNameBytes)
+                throw std::length_error("glTF skin name exceeds its safety limit.");
+            if (skin.Joints.empty())
+                throw std::invalid_argument("glTF skin requires at least one joint.");
+            if (skin.Joints.size() > MaximumRecords)
+                throw std::length_error("glTF skin exceeds its joint safety limit.");
+            if (skin.InverseBindMatrices.size() != skin.Joints.size())
+                throw std::invalid_argument(
+                    "glTF skin requires one inverse-bind matrix per joint.");
+            if (skin.SkeletonRoot != MissingIndex && skin.SkeletonRoot >= scene.Nodes.size())
+                throw std::out_of_range("glTF skeleton root node index is invalid.");
+            for (std::size_t jointIndex = 0u; jointIndex < skin.Joints.size(); ++jointIndex)
+            {
+                if (skin.Joints[jointIndex] >= scene.Nodes.size())
+                    throw std::out_of_range("glTF skin joint node index is invalid.");
+                if (!Finite(skin.InverseBindMatrices[jointIndex]))
+                    throw std::invalid_argument("glTF inverse-bind matrices must be finite.");
+                for (std::size_t previous = 0u; previous < jointIndex; ++previous)
+                    if (skin.Joints[previous] == skin.Joints[jointIndex])
+                        throw std::invalid_argument("glTF skin joints must be unique.");
+            }
+        }
+
+        for (const GltfNodeData& node : scene.Nodes)
+        {
+            if (node.SkinIndex == MissingIndex) continue;
+            const GltfSkinData& skin = scene.Skins[node.SkinIndex];
+            for (const std::uint32_t primitiveIndex : node.PrimitiveIndices)
+            {
+                const GltfPrimitiveData& primitive = scene.Primitives[primitiveIndex];
+                if (primitive.Skinning.empty())
+                    throw std::invalid_argument(
+                        "A skinned glTF node references a primitive without skin influences.");
+                for (const GltfVertexSkinData& influence : primitive.Skinning)
+                    for (std::size_t slot = 0u; slot < influence.Weights.size(); ++slot)
+                        if (influence.Weights[slot] > 0.0f && influence.Joints[slot] >= skin.Joints.size())
+                            throw std::out_of_range(
+                                "glTF vertex joint index exceeds the bound skin palette.");
+            }
+        }
+
+        for (const GltfAnimationClipData& clip : scene.Animations)
+        {
+            if (clip.Name.size() > MaximumNameBytes)
+                throw std::length_error("glTF animation name exceeds its safety limit.");
+            if (clip.Channels.empty())
+                throw std::invalid_argument("glTF animation requires at least one channel.");
+            if (clip.Channels.size() > MaximumRecords)
+                throw std::length_error("glTF animation exceeds its channel safety limit.");
+            for (std::size_t channelIndex = 0u; channelIndex < clip.Channels.size(); ++channelIndex)
+            {
+                const GltfAnimationChannelData& channel = clip.Channels[channelIndex];
+                if (channel.TargetNode >= scene.Nodes.size())
+                    throw std::out_of_range("glTF animation target node index is invalid.");
+                if (!scene.Nodes[channel.TargetNode].HasRestTRS)
+                    throw std::invalid_argument(
+                        "glTF animation targets require a preserved rest TRS pose.");
+                switch (channel.Path)
+                {
+                    case GltfAnimationPath::Translation:
+                    case GltfAnimationPath::Rotation:
+                    case GltfAnimationPath::Scale: break;
+                    default: throw std::invalid_argument("glTF animation path is invalid.");
+                }
+                switch (channel.Interpolation)
+                {
+                    case GltfAnimationInterpolation::Linear:
+                    case GltfAnimationInterpolation::Step:
+                    case GltfAnimationInterpolation::CubicSpline: break;
+                    default: throw std::invalid_argument("glTF animation interpolation is invalid.");
+                }
+                if (channel.Keyframes.empty())
+                    throw std::invalid_argument("glTF animation channel requires at least one keyframe.");
+                if (channel.Keyframes.size() > MaximumRecords)
+                    throw std::length_error("glTF animation channel exceeds its keyframe safety limit.");
+                for (std::size_t previous = 0u; previous < channelIndex; ++previous)
+                    if (clip.Channels[previous].TargetNode == channel.TargetNode &&
+                        clip.Channels[previous].Path == channel.Path)
+                        throw std::invalid_argument(
+                            "glTF animation cannot contain duplicate channels for one node/path.");
+
+                float previousTime = -1.0f;
+                for (const GltfAnimationKeyframe& key : channel.Keyframes)
+                {
+                    if (!std::isfinite(key.TimeSeconds) || key.TimeSeconds < 0.0f ||
+                        key.TimeSeconds <= previousTime)
+                        throw std::invalid_argument(
+                            "glTF animation key times must be finite, non-negative, and strictly increasing.");
+                    previousTime = key.TimeSeconds;
+                    if (!Finite(key.Value) || !Finite(key.InTangent) || !Finite(key.OutTangent))
+                        throw std::invalid_argument("glTF animation keyframe values must be finite.");
+                    if (channel.Path == GltfAnimationPath::Rotation)
+                    {
+                        float lengthSquared = 0.0f;
+                        for (float value : key.Value) lengthSquared += value * value;
+                        if (std::abs(lengthSquared - 1.0f) > 1.0e-3f)
+                            throw std::invalid_argument(
+                                "glTF animation rotation keys must contain unit quaternions.");
+                    }
+                }
+            }
+        }
     }
 
-    [[nodiscard]] inline std::vector<std::byte> SerializeGltfSceneArtifactData(
+    [[nodiscard]] inline std::vector<std::byte> SerializeGltfSceneArtifactDataV1(
         const GltfSceneArtifactData& scene)
     {
         using namespace gltf_scene_artifact_detail;
         ValidateGltfSceneArtifactData(scene);
+        if (!scene.Skins.empty() || !scene.Animations.empty())
+            throw std::invalid_argument(
+                "glTF scene artifact v1 cannot represent skins or animations.");
+        for (const GltfPrimitiveData& primitive : scene.Primitives)
+            if (!primitive.Skinning.empty())
+                throw std::invalid_argument(
+                    "glTF scene artifact v1 cannot represent vertex skinning.");
+        for (const GltfNodeData& node : scene.Nodes)
+            if (node.SkinIndex != MissingIndex)
+                throw std::invalid_argument(
+                    "glTF scene artifact v1 cannot represent node skin bindings.");
+
         BinaryWriter writer;
         writer.WriteBytes(Magic);
-        writer.WriteU32(PayloadVersion);
+        writer.WriteU32(LegacyPayloadVersion);
         writer.WriteU32(static_cast<std::uint32_t>(scene.Materials.size()));
         writer.WriteU32(static_cast<std::uint32_t>(scene.Primitives.size()));
         writer.WriteU32(static_cast<std::uint32_t>(scene.Nodes.size()));
@@ -304,6 +550,113 @@ export namespace kairo::assets
         return std::move(writer).TakeBytes();
     }
 
+    [[nodiscard]] inline DerivedArtifact MakeGltfSceneDerivedArtifactV1(
+        const GltfSceneArtifactData& scene)
+    {
+        return { AssetType::Scene, 1u, "kairo.gltf-scene.v1",
+            SerializeGltfSceneArtifactDataV1(scene) };
+    }
+
+    [[nodiscard]] inline std::vector<std::byte> SerializeGltfSceneArtifactData(
+        const GltfSceneArtifactData& scene)
+    {
+        using namespace gltf_scene_artifact_detail;
+        ValidateGltfSceneArtifactData(scene);
+        BinaryWriter writer;
+        writer.WriteBytes(Magic);
+        writer.WriteU32(PayloadVersion);
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Materials.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Primitives.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Nodes.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.RootNodes.size()));
+
+        for (const GltfMaterialData& material : scene.Materials)
+        {
+            WriteString(writer, material.Name, MaximumNameBytes, "glTF material name");
+            for (float value : material.BaseColorFactor) writer.WriteF32(value);
+            writer.WriteF32(material.MetallicFactor);
+            writer.WriteF32(material.RoughnessFactor);
+            for (float value : material.EmissiveFactor) writer.WriteF32(value);
+            writer.WriteU8(static_cast<std::uint8_t>(material.AlphaMode));
+            writer.WriteF32(material.AlphaCutoff);
+            writer.WriteU8(material.DoubleSided ? 1u : 0u);
+            WriteTextureBinding(writer, material.BaseColorTexture);
+            WriteTextureBinding(writer, material.MetallicRoughnessTexture);
+            WriteTextureBinding(writer, material.NormalTexture);
+            WriteTextureBinding(writer, material.OcclusionTexture);
+            WriteTextureBinding(writer, material.EmissiveTexture);
+        }
+
+        for (const GltfPrimitiveData& primitive : scene.Primitives)
+        {
+            const std::vector<std::byte> mesh = SerializeMeshArtifactData(primitive.Mesh);
+            writer.WriteU64(static_cast<std::uint64_t>(mesh.size()));
+            writer.WriteBytes(mesh);
+            writer.WriteU32(static_cast<std::uint32_t>(primitive.Tangents.size()));
+            for (const auto& tangent : primitive.Tangents)
+                for (float value : tangent) writer.WriteF32(value);
+            writer.WriteU32(primitive.MaterialIndex);
+            writer.WriteU32(static_cast<std::uint32_t>(primitive.Skinning.size()));
+            for (const GltfVertexSkinData& influence : primitive.Skinning)
+            {
+                for (std::uint32_t joint : influence.Joints) writer.WriteU32(joint);
+                for (float weight : influence.Weights) writer.WriteF32(weight);
+            }
+        }
+
+        for (const GltfNodeData& node : scene.Nodes)
+        {
+            WriteString(writer, node.Name, MaximumNameBytes, "glTF node name");
+            writer.WriteU32(std::bit_cast<std::uint32_t>(node.Parent));
+            for (float value : node.LocalTransform) writer.WriteF32(value);
+            writer.WriteU32(static_cast<std::uint32_t>(node.PrimitiveIndices.size()));
+            for (const std::uint32_t primitive : node.PrimitiveIndices) writer.WriteU32(primitive);
+            writer.WriteU32(node.SkinIndex);
+            writer.WriteU8(node.HasRestTRS ? 1u : 0u);
+            for (float value : node.RestTranslation) writer.WriteF32(value);
+            for (float value : node.RestRotation) writer.WriteF32(value);
+            for (float value : node.RestScale) writer.WriteF32(value);
+        }
+        for (const std::uint32_t root : scene.RootNodes) writer.WriteU32(root);
+
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Skins.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Animations.size()));
+        for (const GltfSkinData& skin : scene.Skins)
+        {
+            WriteString(writer, skin.Name, MaximumNameBytes, "glTF skin name");
+            writer.WriteU32(skin.SkeletonRoot);
+            writer.WriteU32(static_cast<std::uint32_t>(skin.Joints.size()));
+            for (std::size_t joint = 0u; joint < skin.Joints.size(); ++joint)
+            {
+                writer.WriteU32(skin.Joints[joint]);
+                for (float value : skin.InverseBindMatrices[joint]) writer.WriteF32(value);
+            }
+        }
+        for (const GltfAnimationClipData& clip : scene.Animations)
+        {
+            WriteString(writer, clip.Name, MaximumNameBytes, "glTF animation name");
+            writer.WriteU32(static_cast<std::uint32_t>(clip.Channels.size()));
+            for (const GltfAnimationChannelData& channel : clip.Channels)
+            {
+                writer.WriteU32(channel.TargetNode);
+                writer.WriteU8(static_cast<std::uint8_t>(channel.Path));
+                writer.WriteU8(static_cast<std::uint8_t>(channel.Interpolation));
+                writer.WriteU32(static_cast<std::uint32_t>(channel.Keyframes.size()));
+                for (const GltfAnimationKeyframe& key : channel.Keyframes)
+                {
+                    writer.WriteF32(key.TimeSeconds);
+                    for (float value : key.Value) writer.WriteF32(value);
+                    for (float value : key.InTangent) writer.WriteF32(value);
+                    for (float value : key.OutTangent) writer.WriteF32(value);
+                }
+            }
+        }
+
+        if (writer.Bytes().size() > MaximumDerivedArtifactPayloadBytes)
+            throw std::length_error("glTF scene artifact exceeds its payload safety limit.");
+        return std::move(writer).TakeBytes();
+    }
+
     [[nodiscard]] inline GltfSceneArtifactData ParseGltfSceneArtifactData(
         std::span<const std::byte> payload)
     {
@@ -311,7 +664,8 @@ export namespace kairo::assets
         BinaryReader reader(payload);
         if (!std::equal(Magic.begin(), Magic.end(), reader.ReadBytes(Magic.size()).begin()))
             throw std::invalid_argument("glTF scene artifact magic is invalid.");
-        if (reader.ReadU32() != PayloadVersion)
+        const std::uint32_t payloadVersion = reader.ReadU32();
+        if (payloadVersion != LegacyPayloadVersion && payloadVersion != PayloadVersion)
             throw std::invalid_argument("glTF scene artifact version is unsupported.");
 
         const std::uint32_t materialCount = reader.ReadU32();
@@ -365,6 +719,18 @@ export namespace kairo::assets
             for (auto& tangent : primitive.Tangents)
                 for (float& value : tangent) value = reader.ReadF32();
             primitive.MaterialIndex = reader.ReadU32();
+            if (payloadVersion >= PayloadVersion)
+            {
+                const std::uint32_t influenceCount = reader.ReadU32();
+                if (influenceCount > MaximumRecords)
+                    throw std::length_error("glTF primitive declares too many skin influences.");
+                primitive.Skinning.resize(influenceCount);
+                for (GltfVertexSkinData& influence : primitive.Skinning)
+                {
+                    for (std::uint32_t& joint : influence.Joints) joint = reader.ReadU32();
+                    for (float& weight : influence.Weights) weight = reader.ReadF32();
+                }
+            }
             scene.Primitives.push_back(std::move(primitive));
         }
 
@@ -380,10 +746,75 @@ export namespace kairo::assets
             node.PrimitiveIndices.resize(nodePrimitiveCount);
             for (std::uint32_t& primitive : node.PrimitiveIndices)
                 primitive = reader.ReadU32();
+            if (payloadVersion >= PayloadVersion)
+            {
+                node.SkinIndex = reader.ReadU32();
+                const std::uint8_t hasRestTRS = reader.ReadU8();
+                if (hasRestTRS > 1u)
+                    throw std::invalid_argument("glTF node rest TRS flag is invalid.");
+                node.HasRestTRS = hasRestTRS != 0u;
+                for (float& value : node.RestTranslation) value = reader.ReadF32();
+                for (float& value : node.RestRotation) value = reader.ReadF32();
+                for (float& value : node.RestScale) value = reader.ReadF32();
+            }
             scene.Nodes.push_back(std::move(node));
         }
         for (std::uint32_t index = 0u; index < rootCount; ++index)
             scene.RootNodes.push_back(reader.ReadU32());
+
+        if (payloadVersion >= PayloadVersion)
+        {
+            const std::uint32_t skinCount = reader.ReadU32();
+            const std::uint32_t animationCount = reader.ReadU32();
+            if (skinCount > MaximumRecords || animationCount > MaximumRecords)
+                throw std::length_error("glTF scene declares too many skins or animations.");
+            scene.Skins.reserve(skinCount);
+            scene.Animations.reserve(animationCount);
+            for (std::uint32_t index = 0u; index < skinCount; ++index)
+            {
+                GltfSkinData skin;
+                skin.Name = ReadString(reader, MaximumNameBytes, "glTF skin name");
+                skin.SkeletonRoot = reader.ReadU32();
+                const std::uint32_t jointCount = reader.ReadU32();
+                if (jointCount > MaximumRecords)
+                    throw std::length_error("glTF skin declares too many joints.");
+                skin.Joints.resize(jointCount);
+                skin.InverseBindMatrices.resize(jointCount);
+                for (std::uint32_t joint = 0u; joint < jointCount; ++joint)
+                {
+                    skin.Joints[joint] = reader.ReadU32();
+                    for (float& value : skin.InverseBindMatrices[joint]) value = reader.ReadF32();
+                }
+                scene.Skins.push_back(std::move(skin));
+            }
+            for (std::uint32_t index = 0u; index < animationCount; ++index)
+            {
+                GltfAnimationClipData clip;
+                clip.Name = ReadString(reader, MaximumNameBytes, "glTF animation name");
+                const std::uint32_t channelCount = reader.ReadU32();
+                if (channelCount > MaximumRecords)
+                    throw std::length_error("glTF animation declares too many channels.");
+                clip.Channels.resize(channelCount);
+                for (GltfAnimationChannelData& channel : clip.Channels)
+                {
+                    channel.TargetNode = reader.ReadU32();
+                    channel.Path = static_cast<GltfAnimationPath>(reader.ReadU8());
+                    channel.Interpolation = static_cast<GltfAnimationInterpolation>(reader.ReadU8());
+                    const std::uint32_t keyCount = reader.ReadU32();
+                    if (keyCount > MaximumRecords)
+                        throw std::length_error("glTF animation channel declares too many keys.");
+                    channel.Keyframes.resize(keyCount);
+                    for (GltfAnimationKeyframe& key : channel.Keyframes)
+                    {
+                        key.TimeSeconds = reader.ReadF32();
+                        for (float& value : key.Value) value = reader.ReadF32();
+                        for (float& value : key.InTangent) value = reader.ReadF32();
+                        for (float& value : key.OutTangent) value = reader.ReadF32();
+                    }
+                }
+                scene.Animations.push_back(std::move(clip));
+            }
+        }
 
         reader.RequireEnd();
         ValidateGltfSceneArtifactData(scene);
@@ -393,7 +824,7 @@ export namespace kairo::assets
     [[nodiscard]] inline DerivedArtifact MakeGltfSceneDerivedArtifact(
         const GltfSceneArtifactData& scene)
     {
-        return { AssetType::Scene, 1u, "kairo.gltf-scene.v1",
+        return { AssetType::Scene, 2u, "kairo.gltf-scene.v2",
             SerializeGltfSceneArtifactData(scene) };
     }
 
@@ -401,9 +832,22 @@ export namespace kairo::assets
         const DerivedArtifact& artifact)
     {
         ValidateDerivedArtifact(artifact);
-        if (artifact.Type != AssetType::Scene || artifact.FormatVersion != 1u ||
-            artifact.Format != "kairo.gltf-scene.v1")
+        const bool v1 = artifact.FormatVersion == 1u &&
+            artifact.Format == "kairo.gltf-scene.v1";
+        const bool v2 = artifact.FormatVersion == 2u &&
+            artifact.Format == "kairo.gltf-scene.v2";
+        if (artifact.Type != AssetType::Scene || (!v1 && !v2))
             throw std::invalid_argument("Derived artifact is not a supported Kairo glTF scene.");
+        BinaryReader header(artifact.Payload);
+        if (!std::equal(gltf_scene_artifact_detail::Magic.begin(),
+            gltf_scene_artifact_detail::Magic.end(),
+            header.ReadBytes(gltf_scene_artifact_detail::Magic.size()).begin()))
+            throw std::invalid_argument("glTF scene artifact magic is invalid.");
+        const std::uint32_t payloadVersion = header.ReadU32();
+        if ((v1 && payloadVersion != gltf_scene_artifact_detail::LegacyPayloadVersion) ||
+            (v2 && payloadVersion != gltf_scene_artifact_detail::PayloadVersion))
+            throw std::invalid_argument(
+                "glTF derived artifact envelope does not match its payload version.");
         return ParseGltfSceneArtifactData(artifact.Payload);
     }
 }
