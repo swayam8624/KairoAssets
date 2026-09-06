@@ -45,6 +45,7 @@ The artifact rejects malformed or ambiguous data before a runtime sees it, inclu
 - skin bindings on nodes with no mesh primitive
 - non-finite animation values or tangents
 - invalid target nodes, paths, or interpolation modes
+- animation targeting a node without preserved rest TRS
 - empty channels and non-monotonic/negative key times
 - duplicate channels targeting the same node/path within one clip
 - non-unit rotation quaternion key values
@@ -57,5 +58,7 @@ This milestone only establishes portable source data. The next runtime milestone
 1. KairoEngineCore: clip sampling, local TRS pose construction, looping/time policy, blending and cross-fades.
 2. KairoRenderer: skin matrix palette generation/upload and skinned vertex execution.
 3. KairoEditor: animation clip selection, playback/scrubbing, skeleton visualization, and pose inspection.
+
+The EngineCore handoff is intentionally sufficient to sample a partial channel against a deterministic rest pose without matrix decomposition. Static matrix-authored nodes continue to use their preserved `LocalTransform`; only animated targets require source TRS.
 
 That dependency direction keeps import workers, CI, command-line project tools, and headless asset processing usable without a graphics runtime.
