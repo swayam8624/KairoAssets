@@ -84,7 +84,7 @@ TEST_CASE("glTF scene importer preserves skinning and TRS animation")
     { "buffer": 0, "byteOffset": 188, "byteLength": 24 }
   ],
   "accessors": [
-    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
+    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 0.0] },
     { "bufferView": 1, "componentType": 5123, "count": 3, "type": "VEC4" },
     { "bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC4" },
     { "bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR" },
