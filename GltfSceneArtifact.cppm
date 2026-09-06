@@ -723,6 +723,16 @@ export namespace kairo::assets
             artifact.Format == "kairo.gltf-scene.v2";
         if (artifact.Type != AssetType::Scene || (!v1 && !v2))
             throw std::invalid_argument("Derived artifact is not a supported Kairo glTF scene.");
+        BinaryReader header(artifact.Payload);
+        if (!std::equal(gltf_scene_artifact_detail::Magic.begin(),
+            gltf_scene_artifact_detail::Magic.end(),
+            header.ReadBytes(gltf_scene_artifact_detail::Magic.size()).begin()))
+            throw std::invalid_argument("glTF scene artifact magic is invalid.");
+        const std::uint32_t payloadVersion = header.ReadU32();
+        if ((v1 && payloadVersion != gltf_scene_artifact_detail::LegacyPayloadVersion) ||
+            (v2 && payloadVersion != gltf_scene_artifact_detail::PayloadVersion))
+            throw std::invalid_argument(
+                "glTF derived artifact envelope does not match its payload version.");
         return ParseGltfSceneArtifactData(artifact.Payload);
     }
 }

@@ -172,3 +172,22 @@ TEST_CASE("glTF scene rejects ambiguous or non-monotonic animation channels")
     scene.Animations[0].Channels.push_back(scene.Animations[0].Channels[0]);
     REQUIRE_THROWS_AS(ValidateGltfSceneArtifactData(scene), std::invalid_argument);
 }
+TEST_CASE("glTF derived artifact rejects envelope and payload version mismatch")
+{
+    const auto scene = AnimatedScene();
+    const auto v2Payload = SerializeGltfSceneArtifactData(scene);
+    const DerivedArtifact falseV1{ AssetType::Scene, 1u, "kairo.gltf-scene.v1", v2Payload };
+    REQUIRE_THROWS_AS(ParseGltfSceneDerivedArtifact(falseV1), std::invalid_argument);
+
+    auto staticScene = scene;
+    staticScene.Skins.clear();
+    staticScene.Animations.clear();
+    staticScene.Primitives[0].Skinning.clear();
+    staticScene.Nodes[1].SkinIndex = GltfMissingIndex;
+    staticScene.Nodes.erase(staticScene.Nodes.begin());
+    staticScene.Nodes[0].Parent = -1;
+    staticScene.RootNodes = { 0u };
+    const auto v1Payload = LegacyV1Payload(staticScene);
+    const DerivedArtifact falseV2{ AssetType::Scene, 2u, "kairo.gltf-scene.v2", v1Payload };
+    REQUIRE_THROWS_AS(ParseGltfSceneDerivedArtifact(falseV2), std::invalid_argument);
+}

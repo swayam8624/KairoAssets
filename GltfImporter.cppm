@@ -199,6 +199,9 @@ export namespace kairo::assets
         {
             if (source.type != cgltf_primitive_type_triangles)
                 throw std::invalid_argument("Only glTF triangle-list primitives are supported.");
+            if (source.targets_count != 0u)
+                throw std::invalid_argument(
+                    "glTF morph targets are not supported by scene artifact v2.");
 
             const cgltf_accessor* positions =
                 FindAttribute(source, cgltf_attribute_type_position);
@@ -218,6 +221,10 @@ export namespace kairo::assets
                 FindAttribute(source, cgltf_attribute_type_joints, 0);
             const cgltf_accessor* weights =
                 FindAttribute(source, cgltf_attribute_type_weights, 0);
+            if (FindAttribute(source, cgltf_attribute_type_joints, 1) != nullptr ||
+                FindAttribute(source, cgltf_attribute_type_weights, 1) != nullptr)
+                throw std::invalid_argument(
+                    "glTF scene artifact v2 supports at most four skin influences per vertex.");
             if ((joints == nullptr) != (weights == nullptr))
                 throw std::invalid_argument(
                     "glTF primitive must provide JOINTS_0 and WEIGHTS_0 together.");
