@@ -456,6 +456,81 @@ export namespace kairo::assets
         }
     }
 
+    [[nodiscard]] inline std::vector<std::byte> SerializeGltfSceneArtifactDataV1(
+        const GltfSceneArtifactData& scene)
+    {
+        using namespace gltf_scene_artifact_detail;
+        ValidateGltfSceneArtifactData(scene);
+        if (!scene.Skins.empty() || !scene.Animations.empty())
+            throw std::invalid_argument(
+                "glTF scene artifact v1 cannot represent skins or animations.");
+        for (const GltfPrimitiveData& primitive : scene.Primitives)
+            if (!primitive.Skinning.empty())
+                throw std::invalid_argument(
+                    "glTF scene artifact v1 cannot represent vertex skinning.");
+        for (const GltfNodeData& node : scene.Nodes)
+            if (node.SkinIndex != MissingIndex)
+                throw std::invalid_argument(
+                    "glTF scene artifact v1 cannot represent node skin bindings.");
+
+        BinaryWriter writer;
+        writer.WriteBytes(Magic);
+        writer.WriteU32(LegacyPayloadVersion);
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Materials.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Primitives.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.Nodes.size()));
+        writer.WriteU32(static_cast<std::uint32_t>(scene.RootNodes.size()));
+
+        for (const GltfMaterialData& material : scene.Materials)
+        {
+            WriteString(writer, material.Name, MaximumNameBytes, "glTF material name");
+            for (float value : material.BaseColorFactor) writer.WriteF32(value);
+            writer.WriteF32(material.MetallicFactor);
+            writer.WriteF32(material.RoughnessFactor);
+            for (float value : material.EmissiveFactor) writer.WriteF32(value);
+            writer.WriteU8(static_cast<std::uint8_t>(material.AlphaMode));
+            writer.WriteF32(material.AlphaCutoff);
+            writer.WriteU8(material.DoubleSided ? 1u : 0u);
+            WriteTextureBinding(writer, material.BaseColorTexture);
+            WriteTextureBinding(writer, material.MetallicRoughnessTexture);
+            WriteTextureBinding(writer, material.NormalTexture);
+            WriteTextureBinding(writer, material.OcclusionTexture);
+            WriteTextureBinding(writer, material.EmissiveTexture);
+        }
+
+        for (const GltfPrimitiveData& primitive : scene.Primitives)
+        {
+            const std::vector<std::byte> mesh = SerializeMeshArtifactData(primitive.Mesh);
+            writer.WriteU64(static_cast<std::uint64_t>(mesh.size()));
+            writer.WriteBytes(mesh);
+            writer.WriteU32(static_cast<std::uint32_t>(primitive.Tangents.size()));
+            for (const auto& tangent : primitive.Tangents)
+                for (float value : tangent) writer.WriteF32(value);
+            writer.WriteU32(primitive.MaterialIndex);
+        }
+
+        for (const GltfNodeData& node : scene.Nodes)
+        {
+            WriteString(writer, node.Name, MaximumNameBytes, "glTF node name");
+            writer.WriteU32(std::bit_cast<std::uint32_t>(node.Parent));
+            for (float value : node.LocalTransform) writer.WriteF32(value);
+            writer.WriteU32(static_cast<std::uint32_t>(node.PrimitiveIndices.size()));
+            for (const std::uint32_t primitive : node.PrimitiveIndices) writer.WriteU32(primitive);
+        }
+        for (const std::uint32_t root : scene.RootNodes) writer.WriteU32(root);
+
+        if (writer.Bytes().size() > MaximumDerivedArtifactPayloadBytes)
+            throw std::length_error("glTF scene artifact exceeds its payload safety limit.");
+        return std::move(writer).TakeBytes();
+    }
+
+    [[nodiscard]] inline DerivedArtifact MakeGltfSceneDerivedArtifactV1(
+        const GltfSceneArtifactData& scene)
+    {
+        return { AssetType::Scene, 1u, "kairo.gltf-scene.v1",
+            SerializeGltfSceneArtifactDataV1(scene) };
+    }
+
     [[nodiscard]] inline std::vector<std::byte> SerializeGltfSceneArtifactData(
         const GltfSceneArtifactData& scene)
     {

@@ -191,3 +191,24 @@ TEST_CASE("glTF derived artifact rejects envelope and payload version mismatch")
     const DerivedArtifact falseV2{ AssetType::Scene, 2u, "kairo.gltf-scene.v2", v1Payload };
     REQUIRE_THROWS_AS(ParseGltfSceneDerivedArtifact(falseV2), std::invalid_argument);
 }
+
+
+TEST_CASE("legacy glTF v1 serializer publishes exact static schema")
+{
+    auto scene = AnimatedScene();
+    scene.Skins.clear();
+    scene.Animations.clear();
+    scene.Primitives[0].Skinning.clear();
+    scene.Nodes[1].SkinIndex = GltfMissingIndex;
+    scene.Nodes.erase(scene.Nodes.begin());
+    scene.Nodes[0].Parent = -1;
+    scene.RootNodes = { 0u };
+
+    const auto payload = SerializeGltfSceneArtifactDataV1(scene);
+    const auto parsed = ParseGltfSceneArtifactData(payload);
+    CHECK(parsed == scene);
+    const auto artifact = MakeGltfSceneDerivedArtifactV1(scene);
+    CHECK(artifact.FormatVersion == 1u);
+    CHECK(artifact.Format == "kairo.gltf-scene.v1");
+    CHECK(ParseGltfSceneDerivedArtifact(artifact) == scene);
+}

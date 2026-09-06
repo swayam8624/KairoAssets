@@ -17,6 +17,7 @@ export namespace kairo::assets
         registry.Register(std::make_shared<PassthroughImporter>());
         registry.Register(std::make_shared<OBJMeshImporter>());
         registry.Register(std::make_shared<StbTextureImporter>());
+        registry.Register(std::make_shared<GltfSceneImporterV1>());
         registry.Register(std::make_shared<GltfSceneImporter>());
     }
 }

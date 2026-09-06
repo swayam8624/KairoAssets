@@ -616,4 +616,35 @@ export namespace kairo::assets
             return MakeGltfSceneDerivedArtifact(scene);
         }
     };
+
+
+    /// Frozen compatibility identity for projects/import records authored before
+    /// skinning/animation artifact v2. Static source decoding reuses the current
+    /// validated parser, but publication is forced back through the exact v1
+    /// binary schema. Any v2-only semantics fail instead of being discarded.
+    class GltfSceneImporterV1 final : public AssetImporter
+    {
+    public:
+        [[nodiscard]] std::string Identifier() const override { return "kairo.gltf.scene"; }
+        [[nodiscard]] std::string Version() const override { return "1"; }
+
+        [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
+        {
+            GltfSceneImporter latest;
+            const GltfSceneArtifactData scene =
+                ParseGltfSceneDerivedArtifact(latest.Import(request));
+            if (!scene.Skins.empty() || !scene.Animations.empty())
+                throw std::invalid_argument(
+                    "kairo.gltf.scene@1 supports static glTF scenes only.");
+            for (const GltfPrimitiveData& primitive : scene.Primitives)
+                if (!primitive.Skinning.empty())
+                    throw std::invalid_argument(
+                        "kairo.gltf.scene@1 cannot preserve vertex skinning.");
+            for (const GltfNodeData& node : scene.Nodes)
+                if (node.SkinIndex != GltfMissingIndex)
+                    throw std::invalid_argument(
+                        "kairo.gltf.scene@1 cannot preserve node skin bindings.");
+            return MakeGltfSceneDerivedArtifactV1(scene);
+        }
+    };
 }
