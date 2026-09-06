@@ -1,0 +1,27 @@
+name: Restore glTF Importer V1
+
+on:
+  push:
+    branches:
+      - feature/gltf-animation-v2
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore legacy importer identity
+        run: python3 .github/scripts/restore_gltf_importer_v1.py
+      - name: Commit compatibility patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Assets: retain glTF importer v1 alongside v2"
+          git push
