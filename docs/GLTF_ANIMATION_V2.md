@@ -1,0 +1,57 @@
+# glTF Scene Artifact V2
+
+`kairo.gltf-scene.v2` extends the existing hierarchy-preserving scene artifact with portable skeletal skinning and transform animation data. KairoAssets remains backend-neutral: it stores source semantics and validation rules but does not evaluate clips, build runtime poses, allocate GPU palettes, or depend on KairoEngineCore/KairoRenderer.
+
+## Compatibility
+
+The payload family keeps the existing `KGLTF001` magic and uses an explicit payload version. `ParseGltfSceneArtifactData()` accepts both payload v1 and v2. A legacy v1 scene produces the same static materials, primitives, nodes, and roots as before, with empty `Skinning`, `Skins`, and `Animations` fields and `GltfMissingIndex` node skin bindings.
+
+The derived artifact envelope is stricter: `kairo.gltf-scene.v1` / format version 1 must wrap a payload-v1 body, while `kairo.gltf-scene.v2` / format version 2 must wrap payload v2. This prevents cache or provenance metadata from claiming one schema while carrying another.
+
+## Skinning
+
+Each skinned primitive stores exactly four joint indices and four weights per vertex in `GltfVertexSkinData`. `GltfSceneImporter` reads glTF `JOINTS_0` and `WEIGHTS_0`, accepts unsigned-byte/unsigned-short joints and FLOAT or normalized unsigned weights, and canonicalizes the four weights to sum to one.
+
+A `GltfSkinData` record stores the ordered joint-node palette, optional skeleton root, and one column-major inverse-bind matrix per joint. If glTF omits `inverseBindMatrices`, the importer materializes identity matrices so the artifact has one deterministic representation.
+
+`GltfNodeData::SkinIndex` binds a mesh-bearing node to a skin. Artifact validation then checks non-zero influences against that skin's palette, rather than treating the raw `JOINTS_0` values as global node indices.
+
+Scene artifact v2 intentionally supports one four-influence set. `JOINTS_1` / `WEIGHTS_1` and morph targets fail explicitly instead of being discarded.
+
+## Animation
+
+`GltfAnimationClipData` contains node-targeted channels. V2 preserves three transform paths:
+
+- translation — three-component values
+- rotation — unit quaternion values
+- scale — three-component values
+
+Linear, Step, and CubicSpline interpolation are preserved. Cubic-spline keys retain the source in-tangent, value, and out-tangent. Quaternion key values are normalized during import; cubic quaternion tangents are preserved as derivatives and are not normalized.
+
+Morph-weight animation is not represented by this schema and therefore fails explicitly at import.
+
+## Validation
+
+The artifact rejects malformed or ambiguous data before a runtime sees it, including:
+
+- skin-influence counts that do not match primitive vertex counts
+- negative, non-finite, or non-normalized weights
+- invalid skin/joint/palette references
+- duplicate joints and non-finite inverse-bind matrices
+- skin bindings on nodes with no mesh primitive
+- non-finite animation values or tangents
+- invalid target nodes, paths, or interpolation modes
+- empty channels and non-monotonic/negative key times
+- duplicate channels targeting the same node/path within one clip
+- non-unit rotation quaternion key values
+- v1/v2 derived-envelope and payload-version mismatch
+
+## Downstream boundary
+
+This milestone only establishes portable source data. The next runtime milestones belong downstream:
+
+1. KairoEngineCore: clip sampling, local TRS pose construction, looping/time policy, blending and cross-fades.
+2. KairoRenderer: skin matrix palette generation/upload and skinned vertex execution.
+3. KairoEditor: animation clip selection, playback/scrubbing, skeleton visualization, and pose inspection.
+
+That dependency direction keeps import workers, CI, command-line project tools, and headless asset processing usable without a graphics runtime.
