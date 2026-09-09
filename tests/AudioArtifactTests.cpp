@@ -4,8 +4,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
+import Kairo.Assets.Types;
+import Kairo.Assets.ImportDatabase;
+import Kairo.Assets.DerivedArtifact;
 import Kairo.Assets.AudioArtifact;
 import Kairo.Assets.Importer;
 import Kairo.Assets.WavImporter;
