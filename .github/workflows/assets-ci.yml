@@ -84,3 +84,14 @@ jobs:
             echo "::error file=test.log,title=Test failure::$message"
           fi
           exit $status
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ runner.os }}-${{ matrix.compiler }}-diagnostics
+          path: |
+            configure.log
+            build.log
+            test.log
+          if-no-files-found: ignore
+          retention-days: 7
