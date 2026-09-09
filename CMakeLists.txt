@@ -42,6 +42,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     Sculpting.cppm
     SculptProduction.cppm
     TextureArtifact.cppm
+    AudioArtifact.cppm
     MaterialArtifact.cppm
     GltfSceneArtifact.cppm
     SourceWatcher.cppm
@@ -49,6 +50,7 @@ target_sources(KairoAssets PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT
     ImporterRegistry.cppm
     OBJImporter.cppm
     TextureImporter.cppm
+    WavImporter.cppm
     GltfImporter.cppm
     GLBImporter.cppm
     BuiltinImporters.cppm
@@ -75,6 +77,7 @@ if(KAIRO_ASSETS_BUILD_TESTS)
     add_executable(KairoAssetsTests
         tests/AssetTests.cpp
         tests/TextureArtifactTests.cpp
+        tests/AudioArtifactTests.cpp
         tests/MaterialArtifactTests.cpp
         tests/GltfSceneArtifactTests.cpp
         tests/GltfAnimationImporterTests.cpp
