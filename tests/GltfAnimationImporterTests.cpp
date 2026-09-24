@@ -165,7 +165,7 @@ TEST_CASE("glTF scene importer rejects dependency paths that escape the source d
         const std::string source =
             std::string("{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"uri\":\"") +
             std::string(uri) +
-            "\",\"byteLength\":4}],\"meshes\":[]}");
+            "\",\"byteLength\":4}],\"meshes\":[]}";
         {
             std::ofstream output(gltfPath, std::ios::binary | std::ios::trunc);
             output << source;
