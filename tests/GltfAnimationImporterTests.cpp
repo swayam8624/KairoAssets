@@ -128,7 +128,7 @@ TEST_CASE("glTF scene importer preserves skinning and TRS animation")
     GltfSceneImporter importer;
     CHECK(importer.Version() == "2");
     const auto artifact = importer.Import({ {}, AssetType::Scene, sourceBytes, gltfPath });
-    REQUIRE(artifact.Format == "kairo.gltf-scene.v2");
+    REQUIRE(artifact.Format == "kairo.gltf-scene.v3");
     const auto scene = ParseGltfSceneDerivedArtifact(artifact);
     REQUIRE(scene.Primitives.size() == 1u);
     REQUIRE(scene.Primitives[0].Skinning.size() == 3u);
