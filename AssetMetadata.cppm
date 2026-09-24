@@ -67,6 +67,8 @@ export namespace kairo::assets
         std::string Importer;
         std::uint64_t Revision = 1u;
         std::vector<AssetReference> Dependencies;
+
+        friend bool operator==(const AssetMetadata&, const AssetMetadata&) = default;
     };
 
     /// Input: a project-relative portable logical path.
