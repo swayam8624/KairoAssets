@@ -77,6 +77,7 @@ if(KAIRO_ASSETS_BUILD_TESTS)
 
     add_executable(KairoAssetsTests
         tests/AssetTests.cpp
+        tests/AssetStressTests.cpp
         tests/TextureArtifactTests.cpp
         tests/AudioArtifactTests.cpp
         tests/MaterialArtifactTests.cpp
