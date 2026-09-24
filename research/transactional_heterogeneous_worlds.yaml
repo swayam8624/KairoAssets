@@ -1,0 +1,13 @@
+schema: kairo.research-track.v1
+track: R3
+title: Transactional heterogeneous worlds
+state: hypothesis
+role: immutable_asset_revision_and_reimport_boundary
+problem: Asset reimport can invalidate meshes, materials, textures and derived data while live runtime references still point at the previous revision.
+hypothesis: Content-addressed immutable revisions plus dependency-aware publish/commit boundaries can reduce invalidated state and make failed reimports rollback-safe.
+baselines: [full_asset_reload, in_place_mutation, naive_dependency_walk]
+workloads: [mesh_reimport, material_and_texture_change, failed_decode, dependency_chain_update]
+metrics: [reimport_latency_ms, invalidated_asset_count, derived_bytes_rebuilt, rollback_latency_ms, stale_reference_failures]
+ablations: [no_content_addressing, no_dependency_graph, no_atomic_publish]
+failure_cases: [decode_failure, missing_dependency, dependency_cycle, interrupted_publish]
+falsification: Reject if immutable transactional reimport cannot reduce invalidation or stale-reference failures versus full reload without unacceptable rebuild cost.
