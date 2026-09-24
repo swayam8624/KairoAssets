@@ -208,21 +208,43 @@ export namespace kairo::assets
             return nullptr;
         }
 
-        [[nodiscard]] inline std::string TextureUri(const cgltf_texture_view& view)
-        {
-            if (view.texture == nullptr || view.texture->image == nullptr ||
-                view.texture->image->uri == nullptr)
-                return {};
-            return view.texture->image->uri;
-        }
-
         [[nodiscard]] inline GltfTextureBinding TextureBinding(
             const cgltf_texture_view& view, float scale = 1.0f)
         {
             GltfTextureBinding binding;
-            binding.Uri = TextureUri(view);
-            binding.TexCoord = view.texcoord < 0 ? 0u : static_cast<std::uint32_t>(view.texcoord);
+            binding.TexCoord = view.texcoord < 0 ? 0u
+                : static_cast<std::uint32_t>(view.texcoord);
             binding.Scale = scale;
+
+            if (view.texture == nullptr || view.texture->image == nullptr)
+                return binding;
+
+            const cgltf_image& image = *view.texture->image;
+            if (image.uri != nullptr && *image.uri != '\0')
+            {
+                binding.Uri = image.uri;
+                return binding;
+            }
+
+            if (image.buffer_view == nullptr)
+                return binding;
+
+            const cgltf_buffer_view& bufferView = *image.buffer_view;
+            if (bufferView.buffer == nullptr || bufferView.buffer->data == nullptr)
+                throw std::invalid_argument(
+                    "Embedded glTF image buffer is not loaded.");
+            if (bufferView.size == 0u)
+                throw std::invalid_argument(
+                    "Embedded glTF image bufferView cannot be empty.");
+            if (bufferView.offset > bufferView.buffer->size ||
+                bufferView.size > bufferView.buffer->size - bufferView.offset)
+                throw std::out_of_range(
+                    "Embedded glTF image bufferView exceeds its buffer.");
+
+            const auto* begin = reinterpret_cast<const std::byte*>(
+                bufferView.buffer->data) + bufferView.offset;
+            binding.EmbeddedBytes.assign(begin, begin + bufferView.size);
+            if (image.mime_type != nullptr) binding.MimeType = image.mime_type;
             return binding;
         }
 
