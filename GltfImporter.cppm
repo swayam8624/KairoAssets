@@ -10,6 +10,7 @@ module;
 #include <cstdint>
 #include <filesystem>
 #include <limits>
+#include <system_error>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -56,6 +57,108 @@ export namespace kairo::assets
                 case cgltf_result_legacy_gltf: return "legacy glTF is unsupported";
                 default: return "unknown cgltf error";
             }
+        }
+
+        [[nodiscard]] inline int HexDigit(char value) noexcept
+        {
+            if (value >= '0' && value <= '9') return value - '0';
+            if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+            if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+            return -1;
+        }
+
+        [[nodiscard]] inline std::string DecodeLocalUriPath(std::string_view uri)
+        {
+            std::string decoded;
+            decoded.reserve(uri.size());
+            for (std::size_t index = 0u; index < uri.size(); ++index)
+            {
+                const unsigned char value = static_cast<unsigned char>(uri[index]);
+                if (value < 0x20u || value == 0x7fu)
+                    throw std::invalid_argument("glTF dependency URI contains a control byte.");
+                if (uri[index] != '%')
+                {
+                    decoded.push_back(uri[index]);
+                    continue;
+                }
+                if (index + 2u >= uri.size())
+                    throw std::invalid_argument("glTF dependency URI has an incomplete percent escape.");
+                const int high = HexDigit(uri[index + 1u]);
+                const int low = HexDigit(uri[index + 2u]);
+                if (high < 0 || low < 0)
+                    throw std::invalid_argument("glTF dependency URI has an invalid percent escape.");
+                const char decodedByte = static_cast<char>((high << 4) | low);
+                if (decodedByte == '\0')
+                    throw std::invalid_argument("glTF dependency URI decodes to NUL.");
+                decoded.push_back(decodedByte);
+                index += 2u;
+            }
+            return decoded;
+        }
+
+        inline void ValidateLocalDependencyUri(
+            const char* rawUri,
+            const std::filesystem::path& sourcePath,
+            std::string_view role)
+        {
+            if (rawUri == nullptr || *rawUri == '\0') return;
+            const std::string_view uri{ rawUri };
+            if (uri.starts_with("data:")) return;
+            if (uri.find("://") != std::string_view::npos ||
+                uri.find('?') != std::string_view::npos ||
+                uri.find('#') != std::string_view::npos)
+                throw std::invalid_argument(
+                    "glTF " + std::string(role) + " URI must be a local project-relative file.");
+
+            const std::string decoded = DecodeLocalUriPath(uri);
+            if (decoded.find('\\') != std::string::npos)
+                throw std::invalid_argument(
+                    "glTF dependency URI must use portable forward slashes.");
+
+            const std::filesystem::path relative{ decoded };
+            if (relative.empty() || relative.is_absolute())
+                throw std::invalid_argument(
+                    "glTF " + std::string(role) + " URI must be relative.");
+            for (const auto& component : relative)
+                if (component == "..")
+                    throw std::invalid_argument(
+                        "glTF " + std::string(role) + " URI cannot escape its source directory.");
+
+            std::error_code error;
+            const auto sourceRoot = std::filesystem::canonical(sourcePath.parent_path(), error);
+            if (error)
+                throw std::runtime_error(
+                    "Cannot resolve glTF source directory while validating dependencies: " +
+                    error.message());
+
+            const auto candidate = sourcePath.parent_path() / relative;
+            const auto metadata = std::filesystem::symlink_status(candidate, error);
+            if (error || metadata.type() == std::filesystem::file_type::not_found)
+                throw std::invalid_argument(
+                    "glTF " + std::string(role) + " dependency is missing: " + decoded);
+            if (std::filesystem::is_symlink(metadata) || !std::filesystem::is_regular_file(metadata))
+                throw std::invalid_argument(
+                    "glTF " + std::string(role) + " dependency must be a regular non-symlink file.");
+
+            const auto resolved = std::filesystem::canonical(candidate, error);
+            if (error || !resolved.starts_with(sourceRoot))
+                throw std::invalid_argument(
+                    "glTF " + std::string(role) + " dependency resolves outside its source directory.");
+        }
+
+        inline void ValidateExternalDependencies(
+            const cgltf_data& data,
+            const std::filesystem::path& sourcePath)
+        {
+            if (sourcePath.empty())
+                throw std::invalid_argument(
+                    "glTF compound import requires a concrete source path.");
+            for (cgltf_size index = 0u; index < data.buffers_count; ++index)
+                ValidateLocalDependencyUri(
+                    data.buffers[index].uri, sourcePath, "buffer");
+            for (cgltf_size index = 0u; index < data.images_count; ++index)
+                ValidateLocalDependencyUri(
+                    data.images[index].uri, sourcePath, "image");
         }
 
         [[nodiscard]] inline const cgltf_accessor* FindAttribute(
@@ -390,6 +493,7 @@ export namespace kairo::assets
                     ResultMessage(parseResult));
             DataOwner owner(parsed);
 
+            ValidateExternalDependencies(*parsed, request.SourcePath);
             const std::string sourcePath = request.SourcePath.string();
             const cgltf_result loadResult = cgltf_load_buffers(
                 &options, parsed, sourcePath.empty() ? nullptr : sourcePath.c_str());
