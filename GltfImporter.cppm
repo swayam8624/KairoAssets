@@ -160,13 +160,34 @@ export namespace kairo::assets
                     "glTF " + std::string(role) + " dependency resolves outside its source directory.");
         }
 
+        [[nodiscard]] inline bool RequiresSourcePath(const char* rawUri) noexcept
+        {
+            if (rawUri == nullptr || *rawUri == '\0') return false;
+            return !std::string_view{ rawUri }.starts_with("data:");
+        }
+
         inline void ValidateExternalDependencies(
             const cgltf_data& data,
             const std::filesystem::path& sourcePath)
         {
+            bool requiresSourcePath = false;
+            for (cgltf_size index = 0u; index < data.buffers_count; ++index)
+                requiresSourcePath =
+                    requiresSourcePath || RequiresSourcePath(data.buffers[index].uri);
+            for (cgltf_size index = 0u; index < data.images_count; ++index)
+                requiresSourcePath =
+                    requiresSourcePath || RequiresSourcePath(data.images[index].uri);
+
             if (sourcePath.empty())
-                throw std::invalid_argument(
-                    "glTF compound import requires a concrete source path.");
+            {
+                if (requiresSourcePath)
+                    throw std::invalid_argument(
+                        "glTF with external file dependencies requires a concrete source path.");
+                // Self-contained GLB, buffer-view images and data-URI glTF are
+                // safe to import directly from memory.
+                return;
+            }
+
             for (cgltf_size index = 0u; index < data.buffers_count; ++index)
                 ValidateLocalDependencyUri(
                     data.buffers[index].uri, sourcePath, "buffer");
