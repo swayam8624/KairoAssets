@@ -96,6 +96,20 @@ export namespace kairo::assets
             return decoded;
         }
 
+        [[nodiscard]] inline bool PathIsWithin(
+            const std::filesystem::path& root,
+            const std::filesystem::path& candidate)
+        {
+            auto rootIt = root.begin();
+            auto candidateIt = candidate.begin();
+            for (; rootIt != root.end(); ++rootIt, ++candidateIt)
+            {
+                if (candidateIt == candidate.end() || *candidateIt != *rootIt)
+                    return false;
+            }
+            return true;
+        }
+
         inline void ValidateLocalDependencyUri(
             const char* rawUri,
             const std::filesystem::path& sourcePath,
@@ -141,7 +155,7 @@ export namespace kairo::assets
                     "glTF " + std::string(role) + " dependency must be a regular non-symlink file.");
 
             const auto resolved = std::filesystem::canonical(candidate, error);
-            if (error || !resolved.starts_with(sourceRoot))
+            if (error || !PathIsWithin(sourceRoot, resolved))
                 throw std::invalid_argument(
                     "glTF " + std::string(role) + " dependency resolves outside its source directory.");
         }
