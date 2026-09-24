@@ -32,8 +32,15 @@ export namespace kairo::assets
     struct GltfTextureBinding final
     {
         std::string Uri;
+        std::string MimeType;
+        std::vector<std::byte> EmbeddedBytes;
         std::uint32_t TexCoord = 0u;
         float Scale = 1.0f;
+
+        [[nodiscard]] bool HasTexture() const noexcept
+        {
+            return !Uri.empty() || !EmbeddedBytes.empty();
+        }
 
         friend bool operator==(const GltfTextureBinding&, const GltfTextureBinding&) = default;
     };
@@ -176,9 +183,12 @@ export namespace kairo::assets
             std::byte{'K'}, std::byte{'G'}, std::byte{'L'}, std::byte{'T'},
             std::byte{'F'}, std::byte{'0'}, std::byte{'0'}, std::byte{'1'} };
         constexpr std::uint32_t LegacyPayloadVersion = 1u;
-        constexpr std::uint32_t PayloadVersion = 2u;
+        constexpr std::uint32_t AnimatedPayloadVersion = 2u;
+        constexpr std::uint32_t PayloadVersion = 3u;
         constexpr std::size_t MaximumNameBytes = 4096u;
         constexpr std::size_t MaximumUriBytes = 64u * 1024u;
+        constexpr std::size_t MaximumMimeTypeBytes = 256u;
+        constexpr std::size_t MaximumEmbeddedTextureBytes = 256u * 1024u * 1024u;
         constexpr std::uint32_t MaximumRecords = 1'000'000u;
         constexpr std::uint32_t MissingIndex = GltfMissingIndex;
 
@@ -200,17 +210,47 @@ export namespace kairo::assets
             return reader.ReadText(size);
         }
 
-        inline void WriteTextureBinding(BinaryWriter& writer, const GltfTextureBinding& binding)
+        inline void WriteLegacyTextureBinding(
+            BinaryWriter& writer, const GltfTextureBinding& binding)
         {
+            if (!binding.EmbeddedBytes.empty() || !binding.MimeType.empty())
+                throw std::invalid_argument(
+                    "Legacy glTF scene payloads cannot represent embedded image data.");
             WriteString(writer, binding.Uri, MaximumUriBytes, "glTF texture URI");
             writer.WriteU32(binding.TexCoord);
             writer.WriteF32(binding.Scale);
         }
 
-        [[nodiscard]] inline GltfTextureBinding ReadTextureBinding(BinaryReader& reader)
+        inline void WriteTextureBinding(BinaryWriter& writer, const GltfTextureBinding& binding)
+        {
+            WriteString(writer, binding.Uri, MaximumUriBytes, "glTF texture URI");
+            WriteString(writer, binding.MimeType, MaximumMimeTypeBytes, "glTF texture MIME type");
+            if (binding.EmbeddedBytes.size() > MaximumEmbeddedTextureBytes)
+                throw std::length_error("Embedded glTF texture exceeds its safety limit.");
+            writer.WriteU64(static_cast<std::uint64_t>(binding.EmbeddedBytes.size()));
+            writer.WriteBytes(binding.EmbeddedBytes);
+            writer.WriteU32(binding.TexCoord);
+            writer.WriteF32(binding.Scale);
+        }
+
+        [[nodiscard]] inline GltfTextureBinding ReadTextureBinding(
+            BinaryReader& reader, std::uint32_t payloadVersion)
         {
             GltfTextureBinding binding;
             binding.Uri = ReadString(reader, MaximumUriBytes, "glTF texture URI");
+            if (payloadVersion >= PayloadVersion)
+            {
+                binding.MimeType = ReadString(
+                    reader, MaximumMimeTypeBytes, "glTF texture MIME type");
+                const std::uint64_t embeddedBytes = reader.ReadU64();
+                if (embeddedBytes > MaximumEmbeddedTextureBytes ||
+                    embeddedBytes > reader.Remaining())
+                    throw std::length_error(
+                        "Embedded glTF texture exceeds its safety limit.");
+                const auto bytes = reader.ReadBytes(
+                    static_cast<std::size_t>(embeddedBytes));
+                binding.EmbeddedBytes.assign(bytes.begin(), bytes.end());
+            }
             binding.TexCoord = reader.ReadU32();
             binding.Scale = reader.ReadF32();
             return binding;
@@ -237,6 +277,16 @@ export namespace kairo::assets
         {
             if (binding.Uri.size() > MaximumUriBytes)
                 throw std::length_error("glTF texture URI exceeds its safety limit.");
+            if (binding.MimeType.size() > MaximumMimeTypeBytes)
+                throw std::length_error("glTF texture MIME type exceeds its safety limit.");
+            if (binding.EmbeddedBytes.size() > MaximumEmbeddedTextureBytes)
+                throw std::length_error("Embedded glTF texture exceeds its safety limit.");
+            if (!binding.Uri.empty() && !binding.EmbeddedBytes.empty())
+                throw std::invalid_argument(
+                    "A glTF texture binding cannot be both URI-backed and embedded.");
+            if (binding.EmbeddedBytes.empty() && !binding.MimeType.empty())
+                throw std::invalid_argument(
+                    "A glTF texture MIME type requires embedded image bytes.");
             if (binding.TexCoord > 7u)
                 throw std::invalid_argument("glTF texture coordinate set is outside the supported range.");
             if (!std::isfinite(binding.Scale) || binding.Scale < 0.0f)
@@ -517,11 +567,11 @@ export namespace kairo::assets
             writer.WriteU8(static_cast<std::uint8_t>(material.AlphaMode));
             writer.WriteF32(material.AlphaCutoff);
             writer.WriteU8(material.DoubleSided ? 1u : 0u);
-            WriteTextureBinding(writer, material.BaseColorTexture);
-            WriteTextureBinding(writer, material.MetallicRoughnessTexture);
-            WriteTextureBinding(writer, material.NormalTexture);
-            WriteTextureBinding(writer, material.OcclusionTexture);
-            WriteTextureBinding(writer, material.EmissiveTexture);
+            WriteLegacyTextureBinding(writer, material.BaseColorTexture);
+            WriteLegacyTextureBinding(writer, material.MetallicRoughnessTexture);
+            WriteLegacyTextureBinding(writer, material.NormalTexture);
+            WriteLegacyTextureBinding(writer, material.OcclusionTexture);
+            WriteLegacyTextureBinding(writer, material.EmissiveTexture);
         }
 
         for (const GltfPrimitiveData& primitive : scene.Primitives)
@@ -665,7 +715,9 @@ export namespace kairo::assets
         if (!std::equal(Magic.begin(), Magic.end(), reader.ReadBytes(Magic.size()).begin()))
             throw std::invalid_argument("glTF scene artifact magic is invalid.");
         const std::uint32_t payloadVersion = reader.ReadU32();
-        if (payloadVersion != LegacyPayloadVersion && payloadVersion != PayloadVersion)
+        if (payloadVersion != LegacyPayloadVersion &&
+            payloadVersion != AnimatedPayloadVersion &&
+            payloadVersion != PayloadVersion)
             throw std::invalid_argument("glTF scene artifact version is unsupported.");
 
         const std::uint32_t materialCount = reader.ReadU32();
@@ -696,11 +748,11 @@ export namespace kairo::assets
             if (doubleSided > 1u)
                 throw std::invalid_argument("glTF double-sided flag is invalid.");
             material.DoubleSided = doubleSided != 0u;
-            material.BaseColorTexture = ReadTextureBinding(reader);
-            material.MetallicRoughnessTexture = ReadTextureBinding(reader);
-            material.NormalTexture = ReadTextureBinding(reader);
-            material.OcclusionTexture = ReadTextureBinding(reader);
-            material.EmissiveTexture = ReadTextureBinding(reader);
+            material.BaseColorTexture = ReadTextureBinding(reader, payloadVersion);
+            material.MetallicRoughnessTexture = ReadTextureBinding(reader, payloadVersion);
+            material.NormalTexture = ReadTextureBinding(reader, payloadVersion);
+            material.OcclusionTexture = ReadTextureBinding(reader, payloadVersion);
+            material.EmissiveTexture = ReadTextureBinding(reader, payloadVersion);
             scene.Materials.push_back(std::move(material));
         }
 
@@ -719,7 +771,7 @@ export namespace kairo::assets
             for (auto& tangent : primitive.Tangents)
                 for (float& value : tangent) value = reader.ReadF32();
             primitive.MaterialIndex = reader.ReadU32();
-            if (payloadVersion >= PayloadVersion)
+            if (payloadVersion >= AnimatedPayloadVersion)
             {
                 const std::uint32_t influenceCount = reader.ReadU32();
                 if (influenceCount > MaximumRecords)
@@ -746,7 +798,7 @@ export namespace kairo::assets
             node.PrimitiveIndices.resize(nodePrimitiveCount);
             for (std::uint32_t& primitive : node.PrimitiveIndices)
                 primitive = reader.ReadU32();
-            if (payloadVersion >= PayloadVersion)
+            if (payloadVersion >= AnimatedPayloadVersion)
             {
                 node.SkinIndex = reader.ReadU32();
                 const std::uint8_t hasRestTRS = reader.ReadU8();
@@ -762,7 +814,7 @@ export namespace kairo::assets
         for (std::uint32_t index = 0u; index < rootCount; ++index)
             scene.RootNodes.push_back(reader.ReadU32());
 
-        if (payloadVersion >= PayloadVersion)
+        if (payloadVersion >= AnimatedPayloadVersion)
         {
             const std::uint32_t skinCount = reader.ReadU32();
             const std::uint32_t animationCount = reader.ReadU32();
@@ -824,7 +876,7 @@ export namespace kairo::assets
     [[nodiscard]] inline DerivedArtifact MakeGltfSceneDerivedArtifact(
         const GltfSceneArtifactData& scene)
     {
-        return { AssetType::Scene, 2u, "kairo.gltf-scene.v2",
+        return { AssetType::Scene, 3u, "kairo.gltf-scene.v3",
             SerializeGltfSceneArtifactData(scene) };
     }
 
@@ -836,7 +888,9 @@ export namespace kairo::assets
             artifact.Format == "kairo.gltf-scene.v1";
         const bool v2 = artifact.FormatVersion == 2u &&
             artifact.Format == "kairo.gltf-scene.v2";
-        if (artifact.Type != AssetType::Scene || (!v1 && !v2))
+        const bool v3 = artifact.FormatVersion == 3u &&
+            artifact.Format == "kairo.gltf-scene.v3";
+        if (artifact.Type != AssetType::Scene || (!v1 && !v2 && !v3))
             throw std::invalid_argument("Derived artifact is not a supported Kairo glTF scene.");
         BinaryReader header(artifact.Payload);
         if (!std::equal(gltf_scene_artifact_detail::Magic.begin(),
@@ -845,7 +899,8 @@ export namespace kairo::assets
             throw std::invalid_argument("glTF scene artifact magic is invalid.");
         const std::uint32_t payloadVersion = header.ReadU32();
         if ((v1 && payloadVersion != gltf_scene_artifact_detail::LegacyPayloadVersion) ||
-            (v2 && payloadVersion != gltf_scene_artifact_detail::PayloadVersion))
+            (v2 && payloadVersion != gltf_scene_artifact_detail::AnimatedPayloadVersion) ||
+            (v3 && payloadVersion != gltf_scene_artifact_detail::PayloadVersion))
             throw std::invalid_argument(
                 "glTF derived artifact envelope does not match its payload version.");
         return ParseGltfSceneArtifactData(artifact.Payload);
