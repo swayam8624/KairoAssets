@@ -152,3 +152,85 @@ TEST_CASE("glTF scene importer preserves skinning and TRS animation")
 
     std::filesystem::remove_all(root);
 }
+
+TEST_CASE("glTF scene importer rejects dependency paths that escape the source directory")
+{
+    const auto root = std::filesystem::temp_directory_path() /
+        ("kairo-gltf-dependency-boundary-" + GenerateAssetID().ToString());
+    std::filesystem::create_directories(root);
+    const auto gltfPath = root / "scene.gltf";
+
+    const auto rejects = [&](std::string_view uri)
+    {
+        const std::string source =
+            std::string("{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"uri\":\"") +
+            std::string(uri) +
+            "\",\"byteLength\":4}],\"meshes\":[]}");
+        {
+            std::ofstream output(gltfPath, std::ios::binary | std::ios::trunc);
+            output << source;
+        }
+        std::vector<std::byte> bytes(source.size());
+        for (std::size_t index = 0u; index < source.size(); ++index)
+            bytes[index] = static_cast<std::byte>(
+                static_cast<unsigned char>(source[index]));
+
+        try
+        {
+            (void)GltfSceneImporter{}.Import(
+                { {}, AssetType::Scene, bytes, gltfPath });
+            FAIL("Expected unsafe glTF dependency URI to be rejected.");
+        }
+        catch (const std::invalid_argument& error)
+        {
+            CHECK(std::string(error.what()).find("cannot escape") != std::string::npos);
+        }
+    };
+
+    rejects("../outside.bin");
+    rejects("%2e%2e/outside.bin");
+    std::filesystem::remove_all(root);
+}
+
+#if defined(__unix__) || defined(__APPLE__)
+TEST_CASE("glTF scene importer rejects symlinked external dependencies")
+{
+    const auto root = std::filesystem::temp_directory_path() /
+        ("kairo-gltf-symlink-boundary-" + GenerateAssetID().ToString());
+    const auto outside = std::filesystem::temp_directory_path() /
+        ("kairo-gltf-outside-" + GenerateAssetID().ToString() + ".bin");
+    std::filesystem::create_directories(root);
+    {
+        std::ofstream output(outside, std::ios::binary);
+        output << "data";
+    }
+    std::filesystem::create_symlink(outside, root / "linked.bin");
+
+    const auto gltfPath = root / "scene.gltf";
+    const std::string source =
+        "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"uri\":\"linked.bin\",\"byteLength\":4}],\"meshes\":[]}";
+    {
+        std::ofstream output(gltfPath, std::ios::binary);
+        output << source;
+    }
+    std::vector<std::byte> bytes(source.size());
+    for (std::size_t index = 0u; index < source.size(); ++index)
+        bytes[index] = static_cast<std::byte>(
+            static_cast<unsigned char>(source[index]));
+
+    try
+    {
+        (void)GltfSceneImporter{}.Import(
+            { {}, AssetType::Scene, bytes, gltfPath });
+        FAIL("Expected symlinked glTF dependency to be rejected.");
+    }
+    catch (const std::invalid_argument& error)
+    {
+        CHECK(std::string(error.what()).find("non-symlink") != std::string::npos);
+    }
+
+    std::filesystem::remove_all(root);
+    std::filesystem::remove(outside);
+}
+#endif
+
