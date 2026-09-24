@@ -133,8 +133,8 @@ TEST_CASE("glTF scene v2 round trips skinning and animation")
     CHECK(parsed.Animations[0].DurationSeconds() == 1.0f);
 
     const auto artifact = MakeGltfSceneDerivedArtifact(scene);
-    CHECK(artifact.FormatVersion == 2u);
-    CHECK(artifact.Format == "kairo.gltf-scene.v2");
+    CHECK(artifact.FormatVersion == 3u);
+    CHECK(artifact.Format == "kairo.gltf-scene.v3");
     CHECK(ParseGltfSceneDerivedArtifact(artifact) == scene);
 }
 
