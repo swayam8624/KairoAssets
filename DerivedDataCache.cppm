@@ -106,22 +106,82 @@ export namespace kairo::assets
             std::error_code error;
             std::filesystem::create_directories(target.parent_path(), error);
             if (error) throw std::runtime_error("Unable to create derived cache directory: " + error.message());
+            // Each process starts its local counter at zero. A plain
+            // "key.tmp-0" file can therefore be truncated by *another*
+            // process also publishing this key. create_directory() is an
+            // atomic exclusive claim, so even colliding names cannot clobber
+            // someone else's in-progress staging file.
             static std::atomic_uint64_t sequence = 0u;
-            const std::filesystem::path temporary = target.string() + ".tmp-" + std::to_string(sequence.fetch_add(1u));
+            std::filesystem::path staging;
+            bool claimed = false;
+            for (unsigned attempt = 0u; attempt < 1024u; ++attempt)
+            {
+                staging = target.string() + ".stage-" +
+                    std::to_string(sequence.fetch_add(1u));
+                error.clear();
+                if (std::filesystem::create_directory(staging, error))
+                {
+                    claimed = true;
+                    break;
+                }
+                if (error && error != std::errc::file_exists)
+                    throw std::runtime_error(
+                        "Unable to claim derived cache staging directory: " +
+                        error.message());
+            }
+            if (!claimed)
+                throw std::runtime_error(
+                    "Derived cache staging sequence exhausted its retry budget.");
+
+            const std::filesystem::path temporary = staging / "payload.kdd";
+            try
             {
                 std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-                if (!output || (!bytes.empty() && !output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()))))
-                    throw std::runtime_error("Unable to write derived cache staging file: " + temporary.string());
+                if (!output || (!bytes.empty() && !output.write(
+                    reinterpret_cast<const char*>(bytes.data()),
+                    static_cast<std::streamsize>(bytes.size()))))
+                    throw std::runtime_error(
+                        "Unable to write derived cache staging file: " + temporary.string());
+                output.close();
+                if (!output)
+                    throw std::runtime_error(
+                        "Unable to close derived cache staging file: " + temporary.string());
+
+                // std::filesystem::rename() silently REPLACES the destination
+                // on POSIX: a second writer can overwrite an immutable key
+                // between Contains() and rename(). Hard-link creation is
+                // atomic and fails if the target already exists on POSIX,
+                // APFS and NTFS, while staging and target share a directory
+                // (and therefore a filesystem).
+                error.clear();
+                std::filesystem::create_hard_link(temporary, target, error);
+                if (error)
+                {
+                    if (Contains(key))
+                    {
+                        if (std::ranges::equal(Load(key), bytes))
+                        {
+                            std::filesystem::remove_all(staging);
+                            return;
+                        }
+                        throw std::logic_error(
+                            "Derived cache key already contains different bytes.");
+                    }
+                    throw std::runtime_error(
+                        "Unable to publish immutable derived cache entry: " +
+                        error.message());
+                }
             }
-            std::filesystem::rename(temporary, target, error);
-            if (error)
+            catch (...)
             {
-                std::filesystem::remove(temporary);
-                // Another process may have won the same content-addressed
-                // publication race on platforms that forbid replace-by-rename.
-                if (Contains(key) && std::ranges::equal(Load(key), bytes)) return;
-                throw std::runtime_error("Unable to publish derived cache entry: " + error.message());
+                std::error_code ignored;
+                std::filesystem::remove_all(staging, ignored);
+                throw;
             }
+            std::filesystem::remove_all(staging, error);
+            if (error)
+                throw std::runtime_error(
+                    "Unable to clean derived cache staging directory: " + error.message());
         }
 
         [[nodiscard]] std::filesystem::path PathFor(const DerivedDataKey& key) const
