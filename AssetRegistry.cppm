@@ -55,7 +55,17 @@ export namespace kairo::assets
                 ValidateDependencies(metadata, m_Assets);
                 const AssetID id = metadata.ID;
                 m_Paths.emplace(pathKey, id);
-                m_Assets.emplace(id, std::move(metadata));
+                try
+                {
+                    m_Assets.emplace(id, std::move(metadata));
+                }
+                catch (...)
+                {
+                    // Registry allocation failed after path registration.
+                    // Never leave a ghost path for an ID that was not stored.
+                    m_Paths.erase(pathKey);
+                    throw;
+                }
                 return id;
             }
             throw std::runtime_error("Asset ID generation exhausted its collision retry budget.");
@@ -73,8 +83,19 @@ export namespace kairo::assets
             const std::string pathKey = PortableAssetPathKey(metadata.Path);
             if (m_Paths.contains(pathKey)) throw std::invalid_argument("Asset path is already registered.");
             ValidateDependencies(metadata, m_Assets);
-            m_Paths.emplace(pathKey, metadata.ID);
-            m_Assets.emplace(metadata.ID, std::move(metadata));
+            const AssetID id = metadata.ID;
+            m_Paths.emplace(pathKey, id);
+            try
+            {
+                m_Assets.emplace(id, std::move(metadata));
+            }
+            catch (...)
+            {
+                // Both lookup maps must describe exactly the same assets,
+                // including under allocator exceptions.
+                m_Paths.erase(pathKey);
+                throw;
+            }
         }
 
         /// Input: a complete manifest snapshot in arbitrary record order.
@@ -149,7 +170,7 @@ export namespace kairo::assets
         /// Output: increments the metadata revision after an atomic path-index update.
         void Move(AssetID id, const std::filesystem::path& newPath)
         {
-            const std::filesystem::path normalized = NormalizeAssetPath(newPath);
+            std::filesystem::path normalized = NormalizeAssetPath(newPath);
             const std::string newKey = PortableAssetPathKey(normalized);
             std::unique_lock lock(m_Mutex);
             auto found = m_Assets.find(id);
@@ -160,16 +181,20 @@ export namespace kairo::assets
                 if (found->second.Path != normalized)
                 {
                     EnsureRevisionCanIncrement(found->second);
+                    found->second.Path.swap(normalized);
                     IncrementRevision(found->second);
                 }
-                found->second.Path = normalized;
                 return;
             }
             if (m_Paths.contains(newKey)) throw std::invalid_argument("Cannot move an asset onto a registered path.");
             EnsureRevisionCanIncrement(found->second);
-            m_Paths.erase(oldKey);
+            // Inserting the new index may allocate/throw: leave the original
+            // index intact until insertion has succeeded. Swapping a
+            // pre-validated filesystem::path is noexcept, so no later
+            // operation can strand the asset without its path index.
             m_Paths.emplace(newKey, id);
-            found->second.Path = normalized;
+            m_Paths.erase(oldKey);
+            found->second.Path.swap(normalized);
             IncrementRevision(found->second);
         }
 

@@ -482,6 +482,43 @@ TEST_CASE("Registry preserves typed identity and portable path uniqueness", "[Ka
     CHECK(registry.FindByPath("BUILTIN/UNIT_CUBE")->ID == mesh);
 }
 
+TEST_CASE("Registry path transactions keep identity, revision and lookup synchronized", "[KairoAssets][Registry]")
+{
+    AssetRegistry registry;
+    const AssetID first = FixedID("000000000081");
+    const AssetID second = FixedID("000000000082");
+    const AssetID third = FixedID("000000000083");
+    registry.Insert(Metadata(first, AssetType::Mesh, "art/first.mesh"));
+    registry.Insert(Metadata(second, AssetType::Mesh, "art/second.mesh"));
+
+    REQUIRE_THROWS_AS(registry.Move(first, "ART/SECOND.mesh"), std::invalid_argument);
+    REQUIRE(registry.Size() == 2u);
+    REQUIRE(registry.FindByPath("art/first.mesh")->ID == first);
+    REQUIRE(registry.FindByPath("art/second.mesh")->ID == second);
+    REQUIRE(registry.At(first).Revision == 1u);
+
+    // A display-only spelling change must update the metadata and revision
+    // without duplicating the existing portable path-index key.
+    registry.Move(first, "ART/First.mesh");
+    REQUIRE(registry.At(first).Path == "ART/First.mesh");
+    REQUIRE(registry.At(first).Revision == 2u);
+    REQUIRE(registry.FindByPath("art/first.mesh")->ID == first);
+    REQUIRE(registry.Size() == 2u);
+
+    registry.Move(first, "art/renamed.mesh");
+    REQUIRE(registry.At(first).Revision == 3u);
+    REQUIRE_FALSE(registry.FindByPath("art/first.mesh").has_value());
+    REQUIRE(registry.FindByPath("ART/RENAMED.mesh")->ID == first);
+    REQUIRE(registry.FindByPath("art/second.mesh")->ID == second);
+
+    REQUIRE_THROWS_AS(
+        registry.Insert(Metadata(third, AssetType::Mesh, "ART/RENAMED.mesh")),
+        std::invalid_argument);
+    REQUIRE_FALSE(registry.Contains(third));
+    REQUIRE(registry.Size() == 2u);
+    REQUIRE(registry.FindByPath("art/renamed.mesh")->ID == first);
+}
+
 TEST_CASE("Registry rejects missing, mistyped, cyclic, and dangling dependencies", "[KairoAssets][Registry]")
 {
     AssetRegistry registry;
