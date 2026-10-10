@@ -453,6 +453,33 @@ TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets]
     REQUIRE_THROWS(NormalizeAssetPath("."));
 }
 
+TEST_CASE("Asset manifest paths reject platform-dependent device aliases",
+    "[KairoAssets][Metadata][Portability]")
+{
+    // Linux and macOS allow many names that Windows treats as devices, or
+    // rejects outright. Catch invalid names before manifest publication.
+    for (const std::string& path : {
+             "CON", "models/con.mesh", "textures/AUX.png", "NUL",
+             "assets/PRN.dat", "shaders/COM1.glsl", "LPT9",
+             "assets/com¹.obj", "assets/LPT².bin",
+             "assets/rough?ness.png", "assets/a*b.mesh",
+             "assets/wood|oak.png", "assets/metal<hi>.png",
+             "assets/a\"b.png", "assets/trailing.", "assets/space "
+         })
+    {
+        INFO(path);
+        REQUIRE_THROWS_AS(NormalizeAssetPath(path), std::invalid_argument);
+    }
+    for (const std::string& path : {
+             "assets/COM10.mesh", "textures/conifer.png",
+             "assets/auxiliary.mat", "models/Concrete.mesh"
+         })
+    {
+        INFO(path);
+        REQUIRE(NormalizeAssetPath(path).generic_string() == path);
+    }
+}
+
 TEST_CASE("Asset categories preserve typed authoring documents", "[KairoAssets][Metadata]")
 {
     CHECK(NameOfAssetType(AssetType::Document) == "document");
