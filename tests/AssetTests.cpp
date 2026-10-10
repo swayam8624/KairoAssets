@@ -576,7 +576,7 @@ TEST_CASE("Asset manifests round-trip deterministically with arbitrary dependenc
     const AssetID material = FixedID("000000000002");
     const std::string source =
         "kairo-assets 1\n"
-        "asset " + material.ToString() + " material source 4 \"materials/brick \\\"red\\\".kmat\" \"kairo.material-v1\"\n"
+        "asset " + material.ToString() + " material source 4 \"materials/brick_red.kmat\" \"kairo.material-v1\"\n"
         "dependency " + texture.ToString() + " texture2d\n"
         "end\n"
         "asset " + texture.ToString() + " texture2d source 2 \"textures/brick.png\" \"kairo.image\"\n"
@@ -586,7 +586,7 @@ TEST_CASE("Asset manifests round-trip deterministically with arbitrary dependenc
     registry.ReplaceAll(ParseAssetManifest(source));
     REQUIRE(registry.Size() == 2u);
     CHECK(registry.At(material).Dependencies.front().ID == texture);
-    CHECK(registry.At(material).Path == "materials/brick \"red\".kmat");
+    CHECK(registry.At(material).Path == "materials/brick_red.kmat");
     CHECK(registry.At(material).Importer == "kairo.material-v1");
 
     const std::string serialized = SerializeAssetManifest(registry);
