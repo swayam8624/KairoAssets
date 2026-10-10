@@ -161,6 +161,60 @@ TEST_CASE("Derived data cache is content addressed and byte exact", "[KairoAsset
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("Derived cache publication never overwrites a concurrent winning writer",
+    "[KairoAssets][Cache][Concurrency]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("kairo-cache-concurrent-" + GenerateAssetID().ToString());
+    DerivedDataCache cache(root);
+    const std::array<std::byte, 1u> source{ std::byte{ 9u } };
+    const auto inputFingerprint = FingerprintBytes(source);
+    const std::array<std::byte, 1u> firstBytes{ std::byte{ 1u } };
+    const std::array<std::byte, 1u> secondBytes{ std::byte{ 2u } };
+
+    for (unsigned trial = 0u; trial < 8u; ++trial)
+    {
+        const DerivedDataKey key = MakeDerivedDataKey(inputFingerprint,
+            AssetType::Mesh, "kairo.test", std::to_string(trial), "immutable-race");
+        std::atomic<bool> start{ false };
+        std::atomic<int> successes{ 0 };
+        std::atomic<int> failures{ 0 };
+        std::atomic<int> winner{ 0 };
+        const auto publish = [&](int writer,
+            const std::array<std::byte, 1u>& data)
+        {
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            try
+            {
+                cache.Store(key, data);
+                winner.store(writer, std::memory_order_relaxed);
+                successes.fetch_add(1, std::memory_order_relaxed);
+            }
+            catch (const std::exception&)
+            {
+                failures.fetch_add(1, std::memory_order_relaxed);
+            }
+        };
+        std::jthread first([&] { publish(1, firstBytes); });
+        std::jthread second([&] { publish(2, secondBytes); });
+        start.store(true, std::memory_order_release);
+        first.join();
+        second.join();
+
+        INFO("Concurrent derived-cache publication trial " << trial);
+        REQUIRE(successes.load() == 1);
+        REQUIRE(failures.load() == 1);
+        const auto stored = cache.Load(key);
+        REQUIRE(stored.size() == 1u);
+        REQUIRE(stored.front() ==
+            (winner.load() == 1 ? firstBytes.front() : secondBytes.front()));
+        CHECK_NOTHROW(cache.Store(key, stored));
+    }
+
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("Derived artifacts require a stable declared format", "[KairoAssets][Artifact]")
 {
     DerivedArtifact artifact{ AssetType::Mesh, 1u, "kairo.mesh.v1", { std::byte{ 1u } } };
