@@ -453,6 +453,33 @@ TEST_CASE("Asset paths normalize portably and prevent traversal", "[KairoAssets]
     REQUIRE_THROWS(NormalizeAssetPath("."));
 }
 
+TEST_CASE("Asset manifest paths reject platform-dependent device aliases",
+    "[KairoAssets][Metadata][Portability]")
+{
+    // Linux and macOS allow many names that Windows treats as devices, or
+    // rejects outright. Catch invalid names before manifest publication.
+    for (const std::string& path : {
+             "CON", "models/con.mesh", "textures/AUX.png", "NUL",
+             "assets/PRN.dat", "shaders/COM1.glsl", "LPT9",
+             "assets/com¹.obj", "assets/LPT².bin",
+             "assets/rough?ness.png", "assets/a*b.mesh",
+             "assets/wood|oak.png", "assets/metal<hi>.png",
+             "assets/a\"b.png", "assets/trailing.", "assets/space "
+         })
+    {
+        INFO(path);
+        REQUIRE_THROWS_AS(NormalizeAssetPath(path), std::invalid_argument);
+    }
+    for (const std::string& path : {
+             "assets/COM10.mesh", "textures/conifer.png",
+             "assets/auxiliary.mat", "models/Concrete.mesh"
+         })
+    {
+        INFO(path);
+        REQUIRE(NormalizeAssetPath(path).generic_string() == path);
+    }
+}
+
 TEST_CASE("Asset categories preserve typed authoring documents", "[KairoAssets][Metadata]")
 {
     CHECK(NameOfAssetType(AssetType::Document) == "document");
@@ -586,7 +613,7 @@ TEST_CASE("Asset manifests round-trip deterministically with arbitrary dependenc
     const AssetID material = FixedID("000000000002");
     const std::string source =
         "kairo-assets 1\n"
-        "asset " + material.ToString() + " material source 4 \"materials/brick \\\"red\\\".kmat\" \"kairo.material-v1\"\n"
+        "asset " + material.ToString() + " material source 4 \"materials/brick_red.kmat\" \"kairo.material-v1\"\n"
         "dependency " + texture.ToString() + " texture2d\n"
         "end\n"
         "asset " + texture.ToString() + " texture2d source 2 \"textures/brick.png\" \"kairo.image\"\n"
@@ -596,7 +623,7 @@ TEST_CASE("Asset manifests round-trip deterministically with arbitrary dependenc
     registry.ReplaceAll(ParseAssetManifest(source));
     REQUIRE(registry.Size() == 2u);
     CHECK(registry.At(material).Dependencies.front().ID == texture);
-    CHECK(registry.At(material).Path == "materials/brick \"red\".kmat");
+    CHECK(registry.At(material).Path == "materials/brick_red.kmat");
     CHECK(registry.At(material).Importer == "kairo.material-v1");
 
     const std::string serialized = SerializeAssetManifest(registry);

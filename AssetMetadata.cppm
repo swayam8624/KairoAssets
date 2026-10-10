@@ -6,6 +6,7 @@ module;
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -90,7 +91,10 @@ export namespace kairo::assets
         for (const char character : original)
         {
             const auto byte = static_cast<unsigned char>(character);
-            bool nonPortable = byte == ':' || byte < 0x20u || byte == 0x7fu;
+            bool nonPortable =
+                byte == ':' || byte == '<' || byte == '>' || byte == '"' ||
+                byte == '|' || byte == '?' || byte == '*' ||
+                byte < 0x20u || byte == 0x7fu;
 #if !defined(_WIN32)
             nonPortable = nonPortable || byte == '\\';
 #endif
@@ -98,11 +102,42 @@ export namespace kairo::assets
                 throw std::invalid_argument("Asset path contains a non-portable character.");
         }
 
+        // Validate *all* path components, not just the last filename: the
+        // Windows device namespace treats CON, NUL, AUX, PRN, COM1..9 and
+        // LPT1..9 as special even inside folders or with extensions.
+        // POSIX can create these paths, so validation must happen here rather
+        // than depending on what filesystem the author used.
         const std::filesystem::path normalized = input.lexically_normal();
         if (normalized.empty() || normalized == ".")
             throw std::invalid_argument("Asset path must identify a project item.");
         for (const auto& component : normalized)
-            if (component == "..") throw std::invalid_argument("Asset path cannot escape the project root.");
+        {
+            if (component == "..")
+                throw std::invalid_argument("Asset path cannot escape the project root.");
+            if (component == "." || component.empty()) continue;
+
+            const std::string name = component.generic_string();
+            if (name.back() == '.' || name.back() == ' ')
+                throw std::invalid_argument(
+                    "Asset path components must not end in a dot or space.");
+            const std::size_t dot = name.find('.');
+            std::string stem = name.substr(0u, dot);
+            while (!stem.empty() && stem.back() == ' ') stem.pop_back();
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                [](unsigned char value) { return static_cast<char>(std::toupper(value)); });
+
+            const bool reserved = stem == "CON" || stem == "PRN" ||
+                stem == "AUX" || stem == "NUL" ||
+                (stem.size() == 4u &&
+                 ((stem.substr(0u, 3u) == "COM" || stem.substr(0u, 3u) == "LPT") &&
+                  stem[3u] >= '1' && stem[3u] <= '9')) ||
+                ((stem.starts_with("COM") || stem.starts_with("LPT")) &&
+                 (stem.substr(3u) == "¹" || stem.substr(3u) == "²" ||
+                  stem.substr(3u) == "³"));
+            if (reserved)
+                throw std::invalid_argument(
+                    "Asset path contains a reserved Windows device name.");
+        }
         return normalized;
     }
 
