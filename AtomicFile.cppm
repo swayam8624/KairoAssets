@@ -1,3 +1,9 @@
+// TEACHING MAP — AtomicFile.cppm
+// Failure-safe same-directory temporary-file publication with final replace. AssetManifest
+// and derived artifacts use this contract to avoid destroying a valid previous file on failed
+// writes.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <filesystem>
