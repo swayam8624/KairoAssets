@@ -1,3 +1,9 @@
+// TEACHING MAP — AssetRegistry.cppm
+// Thread-safe ownership of asset identity/path lookup and dependency bookkeeping. Manifest
+// load/save uses this model; Editor/EngineCore consume stable IDs rather than unchecked path
+// strings.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <algorithm>
