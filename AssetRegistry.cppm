@@ -36,6 +36,7 @@ export namespace kairo::assets
     public:
         /// Input: validated registration whose dependencies already exist.
         /// Output: newly generated persistent identity.
+        /// TEACHING METHOD: Register a new original asset with generated unique ID and validated portable path/dependencies. KairoEditor and import pipelines use the ID for stable references; rollback preserves registry consistency on failure.
         AssetID Create(AssetRegistration registration)
         {
             AssetMetadata metadata;
@@ -75,6 +76,7 @@ export namespace kairo::assets
         /// Input: complete persisted metadata, typically from a manifest.
         /// Task: insert exactly the supplied identity. Duplicate IDs/portable
         /// paths, missing dependencies, type mismatches, and cycles are rejected.
+        /// TEACHING METHOD: Import already-identifiable metadata, rejecting duplicate IDs/paths and invalid dependency graphs. Used when building a registry from trusted manifests.
         void Insert(AssetMetadata metadata)
         {
             metadata.Path = NormalizeAssetPath(metadata.Path);
@@ -104,6 +106,7 @@ export namespace kairo::assets
         /// graph before replacing live state. Failure leaves this registry
         /// unchanged, providing the strong exception guarantee required by
         /// project reload and editor recovery workflows.
+        /// TEACHING METHOD: Validate a complete candidate manifest off to the side, then atomically replace the live registry under lock. No partially loaded asset graph becomes visible.
         void ReplaceAll(std::vector<AssetMetadata> records)
         {
             AssetMap candidateAssets;
@@ -128,12 +131,14 @@ export namespace kairo::assets
             m_Paths.swap(candidatePaths);
         }
 
+        /// TEACHING METHOD: Thread-safe membership query by stable AssetID; never infer an asset's type from existence alone.
         [[nodiscard]] bool Contains(AssetID id) const
         {
             std::shared_lock lock(m_Mutex);
             return m_Assets.contains(id);
         }
 
+        /// TEACHING METHOD: Read-copy of metadata by ID under a shared mutex, returning nullopt when absent. Callers do not own registry internals.
         [[nodiscard]] std::optional<AssetMetadata> Find(AssetID id) const
         {
             std::shared_lock lock(m_Mutex);
@@ -142,6 +147,7 @@ export namespace kairo::assets
             return found->second;
         }
 
+        /// TEACHING METHOD: Strict lookup variant that throws when the ID is missing; use Find when absence is expected.
         [[nodiscard]] AssetMetadata At(AssetID id) const
         {
             const auto metadata = Find(id);
@@ -149,6 +155,7 @@ export namespace kairo::assets
             return *metadata;
         }
 
+        /// TEACHING METHOD: Normalize project-relative source path and query case-folded lookup; portable collision rules matter across macOS/Windows/Linux.
         [[nodiscard]] std::optional<AssetMetadata> FindByPath(const std::filesystem::path& path) const
         {
             const std::string key = PortableAssetPathKey(path);
@@ -159,6 +166,7 @@ export namespace kairo::assets
         }
 
         template<AssetType ExpectedType>
+        /// TEACHING METHOD: Checked typed-handle lookup: resolve ID then verify the declared asset type matches the handle's compile-time expectation.
         [[nodiscard]] AssetMetadata Resolve(AssetHandle<ExpectedType> handle) const
         {
             if (!handle.IsValid()) throw std::invalid_argument("Cannot resolve an invalid typed asset handle.");
@@ -169,6 +177,7 @@ export namespace kairo::assets
 
         /// Input: a new portable project path.
         /// Output: increments the metadata revision after an atomic path-index update.
+        /// TEACHING METHOD: Move one asset's portable path, validate uniqueness and bump revision. Stable AssetID remains the same for scene references.
         void Move(AssetID id, const std::filesystem::path& newPath)
         {
             std::filesystem::path normalized = NormalizeAssetPath(newPath);
@@ -201,6 +210,7 @@ export namespace kairo::assets
 
         /// Task: replace dependencies atomically after checking existence,
         /// declared types, duplicates, self-reference, and graph cycles.
+        /// TEACHING METHOD: Replace an asset's dependency list only after validating referential integrity and cycle constraints; then update revision.
         void SetDependencies(AssetID id, std::vector<AssetReference> dependencies)
         {
             std::unique_lock lock(m_Mutex);
@@ -218,6 +228,7 @@ export namespace kairo::assets
         /// Precondition: no other registered asset depends on id.
         /// Task: prevent accidental dangling references; callers must update or
         /// remove dependents explicitly before deleting the dependency.
+        /// TEACHING METHOD: Reject removal of an asset still depended on by others, preventing broken material/mesh/scene references.
         void Remove(AssetID id)
         {
             std::unique_lock lock(m_Mutex);
@@ -232,6 +243,7 @@ export namespace kairo::assets
         }
 
         /// Output: deterministic ID-sorted metadata for manifests and tools.
+        /// TEACHING METHOD: Return a detached deterministic metadata snapshot for manifest writing, tools and testing; does not expose internal hash maps.
         [[nodiscard]] std::vector<AssetMetadata> Snapshot() const
         {
             std::shared_lock lock(m_Mutex);
@@ -242,6 +254,7 @@ export namespace kairo::assets
             return result;
         }
 
+        /// TEACHING METHOD: Return asset count under shared lock; lightweight observable registry metric.
         [[nodiscard]] std::size_t Size() const
         {
             std::shared_lock lock(m_Mutex);
