@@ -1,3 +1,9 @@
+// TEACHING MAP — AssetManifest.cppm
+// Versioned deterministic asset-manifest parser/serializer, including dependency graphs and
+// portable project paths. Reader rejects invalid links/cycles before EngineCore scene
+// references are resolved.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <algorithm>
