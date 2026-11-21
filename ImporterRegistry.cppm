@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Registry of immutable, explicitly registered importer plugins by identity/version. Importer
+// orchestration asks for a concrete plugin; dependency/version changes should participate in
+// DerivedDataCache invalidation.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <cstddef>
