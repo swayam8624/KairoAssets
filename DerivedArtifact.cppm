@@ -1,3 +1,8 @@
+// TEACHING MAP — DerivedArtifact.cppm
+// Portable representation of outputs derived from source assets. Cache and Registry tie these
+// back to source fingerprints and dependency revisions.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <algorithm>
