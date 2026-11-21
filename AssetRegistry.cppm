@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Thread-safe asset identity, metadata, path and dependency registry. AssetManifest deserializes durable
+// records into it; Importer and editor tools update records while downstream KairoEngineCore resolves
+// stable asset references.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
