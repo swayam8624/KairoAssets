@@ -1,3 +1,8 @@
+// TEACHING MAP — AssetTypes.cppm
+// Portable typed asset handles and kind classifications shared by registry, importers and
+// scene references. Type checks prevent using texture IDs as mesh data.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <optional>
