@@ -1,3 +1,8 @@
+// TEACHING MAP — AssetMetadata.cppm
+// Source, generated and builtin metadata/provenance contracts. Manifests store these fields
+// for deterministic import and stale-data detection.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <algorithm>
