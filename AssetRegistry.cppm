@@ -1,3 +1,4 @@
+// TEACHING MAP: Asset identity/metadata registry underpins manifests, import provenance and stable references. EngineCore stores IDs, Editor authors them, and Renderer converts validated artifacts to GPU-specific resources.
 module;
 
 #include <algorithm>
