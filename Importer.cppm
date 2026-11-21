@@ -1,3 +1,9 @@
+// TEACHING MAP — Importer.cppm
+// Portable importer API for source bytes/paths and diagnostics. Specific OBJ, glTF, GLB,
+// texture or WAV importers implement this contract; registry/pipeline selects them by
+// declared content type.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <cstddef>
