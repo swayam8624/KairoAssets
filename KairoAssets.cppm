@@ -1,3 +1,9 @@
+// TEACHING MAP — KairoAssets.cppm
+// C++23 umbrella export for asset identity, manifest, importers, portable artifact formats
+// and derived cache. EngineCore stores stable AssetIDs; KairoRenderer/Player create
+// process-local GPU handles from imported data.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 export module Kairo.Assets;
 
 export import Kairo.Assets.Types;
