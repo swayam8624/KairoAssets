@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Content-addressed derived artifact cache, keyed from canonical recipes and fingerprints. Importers
+// write/read reusable results here rather than re-decoding unchanged inputs; a cache key must reflect
+// source and importer dependencies.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
