@@ -1,3 +1,9 @@
+// TEACHING MAP — OBJImporter.cppm
+// Parses OBJ mesh vertices, UVs, normals and faces into portable MeshArtifact data. Renderer
+// adapts that format to a GPU mesh; invalid indices, topology and coordinate frames must fail
+// clearly.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <algorithm>

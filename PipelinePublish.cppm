@@ -1,3 +1,9 @@
+// TEACHING MAP — PipelinePublish.cppm
+// Consumes verified KairoPipelineCore DCC publish bundles with SHA-256 provenance. Untrusted
+// files from Blender/Maya/Houdini/Nuke must satisfy the manifest and fingerprint contract
+// before registration.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <cstdint>

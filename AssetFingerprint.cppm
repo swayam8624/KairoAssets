@@ -1,3 +1,8 @@
+// TEACHING MAP — AssetFingerprint.cppm
+// Cryptographic digest of source bytes and import provenance. ImportDatabase/DerivedDataCache
+// compare fingerprints; a matching filename does not establish content identity.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <algorithm>

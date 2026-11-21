@@ -1,3 +1,9 @@
+// TEACHING MAP — AssetID.cppm
+// Stable typed asset identifier and parsing/formatting semantics. AssetRegistry and manifest
+// use these IDs across renames; a persistent AssetID is not a filesystem path or native GPU
+// handle.
+// See READING_ORDER.md and KairoEngineCore/Renderer bridge interactions.
+
 module;
 
 #include <array>

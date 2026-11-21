@@ -1,3 +1,8 @@
+// TEACHING MAP — DerivedDataCache.cppm
+// Content-addressed cache for validated generated import artifacts. Fingerprints and imported
+// source options are key inputs; cache hits must not bypass source/version validation.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <algorithm>
