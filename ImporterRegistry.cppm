@@ -1,3 +1,8 @@
+// TEACHING MAP — ImporterRegistry.cppm
+// Registers and dispatches bounded importers. AssetRegistry stores identity/provenance
+// separately; a parser reporting success does not guarantee downstream renderer support.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <cstddef>
