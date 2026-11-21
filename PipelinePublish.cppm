@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Publication manifest connecting authored artifacts, fingerprints and downstream consumers. It does not
+// own GPU resources or engine entities; see AssetRegistry for durable IDs and KairoGameEngine realtime
+// bridge for runtime handles.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <cstdint>
