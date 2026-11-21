@@ -1,5 +1,7 @@
 # KairoAssets
 
+> **Learning from the source:** Start with the [linked reading guide](docs/SOURCE_READING_ORDER.md) to trace asset UUIDs, manifests, importers, derived caches, authoring and publication through to KairoGameEngine. Original code is released under the [MIT License](LICENSE) for learning, reuse and further development; third-party assets and dependencies retain separate rights.
+
 `KairoAssets` is Kairo's backend-neutral asset identity, metadata registry, and
 project manifest layer. It solves the persistent-reference problem between
 authoring tools and runtime systems without owning Vulkan objects, decoded mesh

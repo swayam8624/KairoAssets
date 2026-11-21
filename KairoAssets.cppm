@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Umbrella module re-exporting identity, registry, importers, derived artifacts and authoring APIs.
+// Consumers import Kairo.Assets while implementations remain in their focused .cppm units; see the study
+// guide for call paths.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 export module Kairo.Assets;
 
 export import Kairo.Assets.Types;

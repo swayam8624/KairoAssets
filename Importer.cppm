@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Importer plugin execution contract: validated ImportRequest source bytes and metadata become a typed
+// DerivedArtifact. DerivedDataCache and ImportDatabase track repeatable output; ImporterRegistry resolves
+// the implementation.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <cstddef>

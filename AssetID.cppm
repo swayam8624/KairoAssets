@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Canonical 128-bit durable asset identity. AssetRegistry and AssetManifest use these UUIDs to preserve
+// references across path changes; KairoRenderer GPU resource handles are intentionally unrelated and
+// session-local.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <array>
