@@ -1,3 +1,9 @@
+// TEACHING MAP — GLBImporter.cppm
+// Loads binary glTF container chunks and then uses shared glTF artifact contracts. Do not
+// assume a parsed GLB automatically loads embedded textures if downstream extraction is
+// unsupported.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #include <algorithm>
