@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Portable text serialization of the project asset registry. Imports AssetID, Registry and AtomicFile for
+// verified identities and safe writes; KairoPlayer RuntimeProject loads this before it builds runtime
+// scene or GPU adapters.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
