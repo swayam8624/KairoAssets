@@ -262,3 +262,12 @@ A10 editor asset browser, thumbnails, drag/drop                 next
 Runtime loaders will depend on `KairoAssets`; this repository will not depend
 on KairoRenderer or KairoEngineCore. That direction keeps headless builds,
 import workers, tests, and command-line project tools usable without a GPU.
+
+
+## Source learning pathway
+
+Follow [the linked reading order](docs/SOURCE_READING_ORDER.md) to trace module ownership, public interfaces, implementation, tests and cross-repository interaction. This path is designed for learners who want to understand both the algorithms and the API boundaries rather than just execute a sample.
+
+## Open-source learning and extension
+
+Original contributions may be learned from, modified and further developed under the applicable [LICENSE](LICENSE). Preserve required notices; external libraries, application-host SDKs, source adaptations, datasets and media retain their own terms. Check [STATUS.md](STATUS.md) and native-host evidence before treating a feature as verified.
