@@ -1,3 +1,9 @@
+// SOURCE STUDY NOTE:
+// Format-specific GLB decoder and validation path. Receives source bytes through Importer API, checks
+// binary headers/chunks, produces portable MeshArtifact data; renderer-specific GPU uploads occur later
+// in KairoRenderer.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
