@@ -1,3 +1,9 @@
+// TEACHING MAP — GltfImporter.cppm
+// Reads portable glTF scene/mesh/material references with explicit buffer/image URI
+// constraints. ImportDatabase and scene artifact modules validate relationships before
+// Editor/Player conversion.
+// Follow READING_ORDER.md for source -> import -> artifact -> renderer APIs.
+
 module;
 
 #define CGLTF_IMPLEMENTATION
