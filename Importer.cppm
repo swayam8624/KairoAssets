@@ -12,6 +12,11 @@ module;
 #include <utility>
 #include <vector>
 
+// TEACHING IMPORT TRANSACTION: normalize typed source path, bounded read,
+// fingerprint source bytes, compute DerivedDataKey from importer+settings,
+// then hit cache or run the plugin. Store typed artifact bytes BEFORE
+// ImportDatabase::Upsert records new provenance. A renderer later parses
+// artifact bytes and uploads native GPU resources; importer never does.
 export module Kairo.Assets.Importer;
 
 import Kairo.Assets.DerivedDataCache;
@@ -25,6 +30,9 @@ import Kairo.Assets.Types;
 export namespace kairo::assets
 {
     /// Input to an importer after the service has validated project ownership.
+    // Nonowning SourceBytes span is valid only during importer execution;
+    // record/path are owned copies. Plugins must return an owned DerivedArtifact
+    // and not retain pointers into ImportSourceAsset's temporary byte vector.
     struct ImportRequest final
     {
         ImportRecord Record;
@@ -37,6 +45,9 @@ export namespace kairo::assets
     /// bytes into a typed, versioned artifact. SourcePath is supplied for
     /// compound formats such as glTF that may resolve sibling dependencies;
     /// importers still do not mutate registries, databases, or caches.
+    // Polymorphic CPU importer interface with identity+version and typed
+    // output. Import() must not update shared registry/cache/provenance;
+    // ImportSourceAsset is the transaction coordinator and type validator.
     class AssetImporter
     {
     public:
@@ -60,6 +71,8 @@ export namespace kairo::assets
         }
     };
 
+    // Return the derived recipe key, an OWNED typed artifact and cache-hit
+    // evidence. CacheHit does not mean a Vulkan/Metal image was uploaded.
     struct ImportOutcome final
     {
         DerivedDataKey Key;
@@ -70,6 +83,13 @@ export namespace kairo::assets
     /// Executes one import transaction. The cache publishes first; only then
     /// does provenance change, so failed importers never mark stale content as
     /// current. Existing cache entries are reused without invoking the plugin.
+    // 1. Match importer identity/version with source registry metadata.
+    // 2. Read source bytes under explicit 1 GiB bound; fingerprint.
+    // 3. Derive key using source hash, asset type, plugin and settings.
+    // 4. Load an existing typed artifact or run importer+publish cache bytes.
+    // 5. Only after artifact validation/success update provenance revision.
+    // A second same-content call can return CacheHit=true without rerunning
+    // stb/OBJ parser. This transaction does not make GPU resource handles.
     [[nodiscard]] inline ImportOutcome ImportSourceAsset(const std::filesystem::path& projectRoot,
         ImportRecord record, const AssetImporter& importer, const AssetRegistry& registry,
         ImportDatabase& imports, const DerivedDataCache& cache)
@@ -109,6 +129,9 @@ export namespace kairo::assets
                 record.Revision = prior->Revision;
             }
         }
+        // A cache hit skips the importer execution but still requires the
+        // decoded derived artifact's declared type to match the registry.
+        // The key is content-and-recipe based, NOT merely a path timestamp.
         const bool hit = cache.Contains(key);
         DerivedArtifact artifact;
         if (hit)
