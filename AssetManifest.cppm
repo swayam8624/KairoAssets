@@ -1,3 +1,18 @@
+// TEACHING MODULE: AssetManifest is the deterministic *text persistence*
+// boundary for AssetRegistry. It serializes a sorted detached snapshot;
+// parsing validates bounded records, paths, ID/type references and source
+// locations before handing candidates to Registry::ReplaceAll.
+//
+// LoadAssetManifest is transactional with respect to registry state: a
+// malformed file does not publish a half-read asset graph. Save stages
+// complete text in a temporary sibling, then uses AtomicFile's host replace
+// operation so readers do not see partial output. Parser bounds are a
+// resource/safety contract, not merely a user-interface nicety.
+//
+// Stable AssetIDs are written into scenes by EngineCore and restored here;
+// importer provenance and derived cache payloads are *not* embedded in the
+// manifest. A file format is not automatically safe for untrusted input
+// without the validation exercised by tests/AssetTests.cpp.
 module;
 
 #include <algorithm>
@@ -28,6 +43,8 @@ import Kairo.Assets.Types;
 
 export namespace kairo::assets
 {
+    // Preserve exact parse line and column for authoring tools and
+    // diagnostics; catching a generic runtime_error loses useful context.
     class AssetManifestError final : public std::runtime_error
     {
     public:
@@ -249,6 +266,8 @@ export namespace kairo::assets
     }
 
     /// Output: deterministic, ID-sorted, diff-friendly manifest text.
+    // Snapshot() is ID-sorted, and each dependency list is sorted too.
+    // This keeps Git diffs stable regardless of unordered_map iteration.
     [[nodiscard]] inline std::string SerializeAssetManifest(const AssetRegistry& registry)
     {
         using namespace manifest_detail;
@@ -268,6 +287,8 @@ export namespace kairo::assets
         return output.str();
     }
 
+    // Read the bounded input entirely, parse/validate to candidate
+    // records, then call ReplaceAll for one atomic registry publication.
     inline void LoadAssetManifest(const std::filesystem::path& path, AssetRegistry& registry)
     {
         std::error_code error;
@@ -285,6 +306,9 @@ export namespace kairo::assets
     /// Task: save through a same-directory temporary file, flush it, then use
     /// the host's atomic rename/replace operation. A failed write or replace
     /// removes the temporary file and preserves the prior manifest.
+    // Stage the entire new manifest beside the destination, flush,
+    // close, and atomically replace. If an exception is raised before
+    // replacement, cleanup must leave the prior file intact.
     inline void SaveAssetManifest(const std::filesystem::path& path, const AssetRegistry& registry)
     {
         const std::filesystem::path parent = path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
