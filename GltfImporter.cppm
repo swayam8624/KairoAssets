@@ -85,6 +85,9 @@ export namespace kairo::assets
             return -1;
         }
 
+        // Decode percent escapes only after rejecting control bytes.
+        // URL escaping can hide traversal or separators; the decoded
+        // path must be checked again before filesystem access.
         [[nodiscard]] inline std::string DecodeLocalUriPath(std::string_view uri)
         {
             std::string decoded;
@@ -130,6 +133,11 @@ export namespace kairo::assets
 
         // glTF external URI references are not automatically trusted:
         // normalize/check paths before touching files relative to source.
+        // External glTF buffer/image URI is untrusted source input.
+        // Require a project-relative local spelling, reject traversal,
+        // absolute paths, symlink targets and nonregular files, then
+        // resolve canonical paths under the containing source folder.
+        // Inlined data: URIs are a different, self-contained case.
         inline void ValidateLocalDependencyUri(
 
             const char* rawUri,
@@ -187,6 +195,10 @@ export namespace kairo::assets
             return !std::string_view{ rawUri }.starts_with("data:");
         }
 
+        // Scan both buffer and image URI fields *before* cgltf opens
+        // external resources. In-memory scenes without SourcePath are
+        // safe only if no external file URI is required (e.g. GLB or
+        // data URI); otherwise exact source root must be supplied.
         inline void ValidateExternalDependencies(
             const cgltf_data& data,
             const std::filesystem::path& sourcePath)
@@ -306,6 +318,9 @@ export namespace kairo::assets
             return material;
         }
 
+        // Check accessor conversion success and reject NaN/inf
+        // components. Geometry, skinning and animation share this
+        // numeric trust boundary before publishing a CPU artifact.
         inline void ReadVector(const cgltf_accessor& accessor, cgltf_size index,
             float* destination, cgltf_size components, const char* role)
         {
@@ -316,6 +331,9 @@ export namespace kairo::assets
                     throw std::invalid_argument(std::string("glTF ") + role + " values must be finite.");
         }
 
+        // A zero-length direction cannot define a valid unit axis.
+        // Normalize finite vectors so camera/normal/animation
+        // conventions do not depend on malformed source magnitudes.
         inline void Normalize3(std::array<float, 3u>& value, const char* role)
         {
             const float length = std::sqrt(
@@ -325,6 +343,9 @@ export namespace kairo::assets
             for (float& component : value) component /= length;
         }
 
+        // Nonfinite or all-zero rotations are invalid; normalize
+        // loaded quaternion coefficients before engine animation or
+        // scene transform composition depends on their orientation.
         inline void NormalizeQuaternion(std::array<float, 4u>& value)
         {
             float lengthSquared = 0.0f;
@@ -548,6 +569,12 @@ export namespace kairo::assets
         }
     }
 
+    // Importer v2 converts cgltf's temporary pointer graph into
+    // owning, typed GltfSceneArtifactData: materials, primitives,
+    // nodes/hierarchy, skins, animation clips and root indices.
+    // DataOwner guarantees cgltf_data cleanup on parser failure;
+    // ValidateGltfSceneArtifactData is the final publication gate.
+    // No native GPU buffer is created in this source importer.
     class GltfSceneImporter final : public AssetImporter
     {
     public:
@@ -571,6 +598,9 @@ export namespace kairo::assets
                     ResultMessage(parseResult));
             DataOwner owner(parsed);
 
+            // Validate local URI containment *before* allowing cgltf
+            // to load any external buffers. JSON format validity and
+            // external filesystem trust are separate checks.
             ValidateExternalDependencies(*parsed, request.SourcePath);
             const std::string sourcePath = request.SourcePath.string();
             const cgltf_result loadResult = cgltf_load_buffers(
@@ -810,6 +840,9 @@ export namespace kairo::assets
                         scene.RootNodes.push_back(static_cast<std::uint32_t>(index));
             }
 
+            // Publish only an artifact whose node indices, child
+            // links, mesh payloads, skin bindings and animation data
+            // pass the engine's typed format validator.
             ValidateGltfSceneArtifactData(scene);
             return MakeGltfSceneDerivedArtifact(scene);
         }
@@ -820,6 +853,10 @@ export namespace kairo::assets
     /// skinning/animation artifact v2. Static source decoding reuses the current
     /// validated parser, but publication is forced back through the exact v1
     /// binary schema. Any v2-only semantics fail instead of being discarded.
+    // Backward-compatible versioned importer identity. It uses the
+    // current validated decoder, then rejects any v2-only skinning
+    // or animation before encoding in the frozen v1 binary format.
+    // Never silently drop newer features from an old project.
     class GltfSceneImporterV1 final : public AssetImporter
     {
     public:
