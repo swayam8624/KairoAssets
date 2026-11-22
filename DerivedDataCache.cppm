@@ -56,6 +56,11 @@ export namespace kairo::assets
     // The recipe encodes content fingerprint + byte count, output type,
     // importer name/version and canonical options. Omitting any of these
     // can reuse an artifact produced by incompatible settings.
+    // Hash a canonical *import recipe*, not the destination path or
+    // file modification time: source digest+size, output AssetType,
+    // importer identity/version and explicit canonical settings.
+    // The returned fixed SHA-256 key is the immutable storage address;
+    // callers must update it when any recipe parameter changes.
     [[nodiscard]] inline DerivedDataKey MakeDerivedDataKey(const AssetFingerprint& source,
         AssetType expectedType, std::string_view importer, std::string_view importerVersion,
         std::string_view canonicalSettings)
@@ -93,12 +98,19 @@ export namespace kairo::assets
             if (m_Root.empty()) throw std::invalid_argument("Derived data cache requires a root directory.");
         }
 
+        // Fast metadata-level existence check. It does not parse a
+        // derived artifact or independently certify its semantic
+        // contents; Load owns the bounded byte read.
         [[nodiscard]] bool Contains(const DerivedDataKey& key) const
         {
             std::error_code error;
             return std::filesystem::is_regular_file(PathFor(key), error) && !error;
         }
 
+        // Read exact content into a detached vector after checking
+        // file size against MaximumEntryBytes. Missing path is an
+        // ordinary cache miss; a truncated read is a hard IO failure.
+        // Concrete DerivedArtifact readers validate payload format.
         [[nodiscard]] std::vector<std::byte> Load(const DerivedDataKey& key) const
         {
             const std::filesystem::path path = PathFor(key);
@@ -116,6 +128,11 @@ export namespace kairo::assets
         // Stage and publish without replacing the target on another
         // process's successful Store. A duplicate key must refer to the
         // same bytes, not silently overwrite immutable content.
+        // Content-addressed *immutable* publication. If the key
+        // exists, only identical bytes are accepted. Otherwise claim
+        // a private staging directory, write payload.kdd, then publish
+        // through an atomic hard-link create that cannot overwrite a
+        // competing writer's target. Recheck equality on race failure.
         void Store(const DerivedDataKey& key, std::span<const std::byte> bytes) const
         {
             if (bytes.size() > MaximumEntryBytes)
@@ -135,6 +152,10 @@ export namespace kairo::assets
             // process also publishing this key. create_directory() is an
             // atomic exclusive claim, so even colliding names cannot clobber
             // someone else's in-progress staging file.
+            // This sequence is process-local, so another process may
+            // choose the same suffix. Exclusively creating the *directory*
+            // handles collisions safely; a plain shared temp file would
+            // permit another writer to truncate its in-progress payload.
             static std::atomic_uint64_t sequence = 0u;
             std::filesystem::path staging;
             bool claimed = false;
@@ -178,6 +199,11 @@ export namespace kairo::assets
                 // APFS and NTFS, while staging and target share a directory
                 // (and therefore a filesystem).
                 error.clear();
+                // No-overwrite publication is the crucial difference
+                // from POSIX rename, which could replace an existing
+                // immutable key. Staging/target share a filesystem;
+                // filesystems without hard-link support must report
+                // the error instead of silently falling back.
                 std::filesystem::create_hard_link(temporary, target, error);
                 if (error)
                 {
@@ -208,6 +234,10 @@ export namespace kairo::assets
                     "Unable to clean derived cache staging directory: " + error.message());
         }
 
+        // Shard fixed hexadecimal hashes by their first two digits,
+        // keeping a large cache out of a single giant directory.
+        // This is an implementation location for derived CPU bytes,
+        // unrelated to the original authored AssetID/source path.
         [[nodiscard]] std::filesystem::path PathFor(const DerivedDataKey& key) const
         {
             const std::string value = key.ToString();
