@@ -70,6 +70,10 @@ export namespace kairo::assets
             std::size_t Column = 1u;
         };
 
+        // TokenizeLine: split one bounded manifest statement while preserving token
+        // columns. Quoted values may contain escaped quote, backslash, newline and
+        // tab; malformed escapes throw AssetManifestError with exact line/column,
+        // instead of accepting ambiguous file paths.
         [[nodiscard]] inline std::vector<Token> TokenizeLine(std::string_view line, std::size_t lineNumber)
         {
             std::vector<Token> tokens;
@@ -124,6 +128,9 @@ export namespace kairo::assets
             return tokens;
         }
 
+        // RequireCount: check the entire statement arity before indexing tokens. An
+        // extra token reports the first unexpected column, keeping Editor import
+        // diagnostics actionable.
         inline void RequireCount(const std::vector<Token>& tokens, std::size_t expected,
             std::size_t line, std::string_view statement)
         {
@@ -135,6 +142,9 @@ export namespace kairo::assets
             }
         }
 
+        // ParseRevision: std::from_chars rejects nonnumeric and partially parsed
+        // values, and zero is not a valid revision. This prevents a saved manifest
+        // from silently resetting the cache invalidation sequence.
         [[nodiscard]] inline std::uint64_t ParseRevision(const Token& token, std::size_t line)
         {
             std::uint64_t result = 0u;
@@ -145,6 +155,9 @@ export namespace kairo::assets
             return result;
         }
 
+        // Quote: escape path/importer text symmetrically with TokenizeLine, so a
+        // literal space, quote or backslash round-trips without changing a portable
+        // asset identity.
         [[nodiscard]] inline std::string Quote(std::string_view value)
         {
             std::string result = "\"";
@@ -169,6 +182,10 @@ export namespace kairo::assets
     /// Output: fully validated metadata records in manifest order.
     /// Degeneracy: malformed syntax reports exact one-based line/column; graph
     /// errors are reported when records are installed into AssetRegistry.
+    // ParseAssetManifest: enforce a versioned header and finite bounds, then
+    // parse asset/dependency/end as a state machine. It builds detached
+    // AssetMetadata records, never mutating an AssetRegistry during partial
+    // decoding. Cross-record IDs/types/cycles are checked later in ReplaceAll.
     [[nodiscard]] inline std::vector<AssetMetadata> ParseAssetManifest(std::string_view source)
     {
         using namespace manifest_detail;
@@ -268,6 +285,10 @@ export namespace kairo::assets
     /// Output: deterministic, ID-sorted, diff-friendly manifest text.
     // Snapshot() is ID-sorted, and each dependency list is sorted too.
     // This keeps Git diffs stable regardless of unordered_map iteration.
+    // SerializeAssetManifest: Snapshot returns ID-sorted detached records;
+    // sorting each dependency list makes output stable regardless of the
+    // unordered registry's internal iteration order. This is a reproducible text
+    // format, not binary imported content.
     [[nodiscard]] inline std::string SerializeAssetManifest(const AssetRegistry& registry)
     {
         using namespace manifest_detail;
@@ -289,6 +310,10 @@ export namespace kairo::assets
 
     // Read the bounded input entirely, parse/validate to candidate
     // records, then call ReplaceAll for one atomic registry publication.
+    // LoadAssetManifest: check filesystem byte length before allocation, read the
+    // complete file, parse records, then replace the registry in one validated
+    // swap. A malformed document must not leave an editor with a partially loaded
+    // metadata graph.
     inline void LoadAssetManifest(const std::filesystem::path& path, AssetRegistry& registry)
     {
         std::error_code error;
@@ -309,6 +334,10 @@ export namespace kairo::assets
     // Stage the entire new manifest beside the destination, flush,
     // close, and atomically replace. If an exception is raised before
     // replacement, cleanup must leave the prior file intact.
+    // SaveAssetManifest: stage complete manifest text in a unique same-directory
+    // temporary file, flush/close it, then atomically replace the destination.
+    // Failure cleans the temporary path without exposing partial output to
+    // ordinary readers.
     inline void SaveAssetManifest(const std::filesystem::path& path, const AssetRegistry& registry)
     {
         const std::filesystem::path parent = path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
