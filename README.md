@@ -1,5 +1,7 @@
 # KairoAssets
 
+**Cross-repository integration lab:** [Stable typed assets → import cache → native renderer upload lifecycle](https://github.com/swayam8624/KairoGameEngine/blob/main/docs/ASSET_SCENE_TO_GPU_LIFETIME_LAB.md). Read the authored/CPU contracts before following the native GPU backend; source inspection is not a native test result.
+
 **Learn through the source:** [complete reading order](docs/SOURCE_READING_ORDER.md) · [asset identity → importer → cache → renderer walkthrough](docs/ASSET_PIPELINE_WALKTHROUGH.md) · [AssetRegistry dependency and transaction exercises](docs/ASSET_REGISTRY_TRANSACTIONS_AND_GRAPH_EXERCISES.md) · [texture mip bytes → GPU upload, layout transitions and descriptor ownership](https://github.com/swayam8624/KairoRenderer/blob/main/docs/TEXTURE_UPLOAD_AND_RENDER_TARGET_TRANSITIONS_LAB.md).
 
 Start by distinguishing persistent identities from paths, CPU artifacts,
