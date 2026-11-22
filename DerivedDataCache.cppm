@@ -1,3 +1,18 @@
+// TEACHING MODULE: DerivedDataCache keeps immutable *artifact bytes* by a
+// SHA-256 key computed over source fingerprint, asset type, importer identity,
+// importer version and canonical settings. The key is not just a timestamp:
+// changing the recipe must invalidate cached results even if the path stays.
+//
+// Contains is a quick existence check; Load owns a detached byte vector.
+// Store rejects a second *different* payload for the same key. Staging uses
+// an exclusively claimed directory and a hard-link publication to avoid
+// overwriting an existing key in cross-process races. A concurrent writer
+// may succeed first; callers must handle that outcome. Cache does not
+// validate/interpret decoded mesh or texture semantics; concrete Artifact
+// serializers and importers do that.
+//
+// KairoRenderer uploads validated artifacts to backend-native resources; GPU
+// lifetime is unrelated to keeping the CPU artifact in this disk cache.
 module;
 
 #include <algorithm>
@@ -38,6 +53,9 @@ export namespace kairo::assets
     /// Input: source identity plus canonical importer identity/settings.
     /// Output: portable cache key. Task: ensure every byte that can change an
     /// importer result participates in cache invalidation.
+    // The recipe encodes content fingerprint + byte count, output type,
+    // importer name/version and canonical options. Omitting any of these
+    // can reuse an artifact produced by incompatible settings.
     [[nodiscard]] inline DerivedDataKey MakeDerivedDataKey(const AssetFingerprint& source,
         AssetType expectedType, std::string_view importer, std::string_view importerVersion,
         std::string_view canonicalSettings)
@@ -62,6 +80,9 @@ export namespace kairo::assets
     /// normal and never imply a source error. Writes stage beside their target
     /// before replacement so a reader observes either a previous complete
     /// artifact or a complete new artifact, never a partial byte stream.
+    // Cache entry publication is immutable and content-addressed.
+    // It does not own a source watcher, registry graph or native renderer
+    // upload. Failed reads and missing entries are normal cache misses.
     class DerivedDataCache final
     {
     public:
@@ -92,6 +113,9 @@ export namespace kairo::assets
             return bytes;
         }
 
+        // Stage and publish without replacing the target on another
+        // process's successful Store. A duplicate key must refer to the
+        // same bytes, not silently overwrite immutable content.
         void Store(const DerivedDataKey& key, std::span<const std::byte> bytes) const
         {
             if (bytes.size() > MaximumEntryBytes)
