@@ -1,3 +1,14 @@
+// TEACHING MODULE: ImporterRegistry publishes immutable concrete
+// AssetImporter instances under the pair (Identifier, Version).
+// The importer decoder consumes source bytes and produces derived CPU
+// artifacts; ImportDatabase tracks whether source/version/settings changed.
+// The registry is *not* a dynamic plugin loader and does not own project
+// AssetIDs or GPU resources.
+//
+// std::shared_ptr<const AssetImporter> allows callers to retain a safely
+// owned decoder beyond the registry's shared lock. Multiple versions may
+// coexist to re-import an old project reproducibly. Registration must reject
+// duplicate exact keys rather than changing decoder behavior silently.
 module;
 
 #include <cstddef>
@@ -35,6 +46,9 @@ export namespace kairo::assets
     /// preserving exact version selection. Registration is explicit and never
     /// loads dynamic libraries; a future plugin loader can validate a library
     /// and then publish its AssetImporter instance through this same boundary.
+    // Thread-safe immutable plugin directory. Shared locks protect
+    // lookup/snapshot, while exclusive locking protects registration.
+    // External decoder objects remain alive through shared ownership.
     class ImporterRegistry final
     {
     public:
