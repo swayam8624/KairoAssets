@@ -1,3 +1,16 @@
+// TEACHING MODULE: Parse a DCC/Blender publish bundle into validated,
+// typed KairoAssets identities and reproducible source provenance. The
+// JSON manifest, source path, file roles, fingerprints and media types
+// are untrusted until validated against expected keys and project root.
+//
+// Validation must happen before calling AssetRegistry to publish changes.
+// Asset fingerprint checks prevent accepting modified or missing declared
+// payloads. Renderer and EngineCore consume imported/registered artifact
+// references, rather than reading arbitrary DCC source paths directly.
+//
+// This integration is not the same as *owning* Blender or silently granting
+// permission to redistribute imported meshes/textures; preserve the
+// original asset attribution/license independently of code licensing.
 module;
 
 #include <cstdint>
@@ -32,6 +45,9 @@ export namespace kairo::assets
         std::string MediaType;
     };
 
+    // Bundle metadata distinguishes an authored source, its published
+    // child artifacts, and the host that produced them. A fingerprint is
+    // an integrity identifier, not a copyright or provenance grant.
     struct PipelinePublishManifest final
     {
         PipelinePublishKind Kind = PipelinePublishKind::Asset;
