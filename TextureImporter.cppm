@@ -16,6 +16,12 @@ module;
 #include <system_error>
 #include <vector>
 
+// TEACHING IMPORT BOUNDARY: source bytes -> stb_image decoder -> owned
+// canonical TextureArtifactData -> versioned DerivedArtifact. The importer's
+// Identity/Version and canonical settings are part of DerivedDataKey, which
+// KairoGameEngine uses before RendererRuntime creates any GPU texture.
+// The STBI_NO_STDIO contract means the importer decodes supplied bytes,
+// while ImportSourceAsset owns bounded project-local file reading.
 export module Kairo.Assets.TextureImporter;
 
 import Kairo.Assets.DerivedArtifact;
@@ -25,6 +31,9 @@ import Kairo.Assets.Types;
 
 export namespace kairo::assets
 {
+    // Semantic decode recipe, not GPU sampler state: ColorSpace, NormalMap,
+    // GenerateMips and a maximum decoded dimension. These values must be
+    // canonicalized and included in the derived key for reproducible reuse.
     struct TextureImportSettings final
     {
         TextureColorSpace ColorSpace = TextureColorSpace::SRGB;
@@ -33,6 +42,9 @@ export namespace kairo::assets
         std::uint32_t MaximumDimension = 16'384u;
     };
 
+    // Parse strictly typed semicolon-separated key=value tokens. Reject
+    // unknown keys, malformed numeric dimension and boolean encodings.
+    // A normal map forces Linear even if a stale recipe said SRGB.
     [[nodiscard]] inline TextureImportSettings ParseTextureImportSettings(
         std::string_view canonicalSettings)
     {
@@ -90,6 +102,9 @@ export namespace kairo::assets
         return settings;
     }
 
+    // Produce one stable settings string with fixed field order; recipe
+    // equivalence must not depend on caller argument order or process locale.
+    // The string participates in MakeDerivedDataKey and cache invalidation.
     [[nodiscard]] inline std::string CanonicalTextureImportSettings(
         const TextureImportSettings& settings)
     {
@@ -104,12 +119,20 @@ export namespace kairo::assets
             ";max=" + std::to_string(settings.MaximumDimension);
     }
 
+    // Concrete importer uses stb_image only for CPU decoding. Identifier()
+    // and Version() are versioned contracts checked by ImportSourceAsset;
+    // the importer itself does not publish a cache key or create VkImage.
     class StbTextureImporter final : public AssetImporter
     {
     public:
         [[nodiscard]] std::string Identifier() const override { return "kairo.texture.stb"; }
         [[nodiscard]] std::string Version() const override { return "1"; }
 
+        // Validate typed texture request and decoder input byte count.
+        // For HDR input use stbi_loadf and BuildTextureMipChainRGBA32Float;
+        // otherwise use stbi_load and BuildTextureMipChainRGBA8. RAII Release
+        // frees stb-owned decoded storage on normal return or exceptions.
+        // Optional no-mips truncation occurs before derived serialization.
         [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
         {
             if (request.ExpectedType != AssetType::Texture2D)
@@ -128,6 +151,9 @@ export namespace kairo::assets
             int height = 0;
             int channels = 0;
 
+            // HDR and ordinary byte textures need distinct decoding paths:
+            // Float32 source radiance -> finite binary16 artifact, versus
+            // RGBA8 source bytes -> color-space-aware mip generation.
             if (stbi_is_hdr_from_memory(source, sourceBytes) != 0)
             {
                 float* decoded = stbi_loadf_from_memory(
@@ -152,6 +178,8 @@ export namespace kairo::assets
                 return MakeTextureDerivedArtifact(texture);
             }
 
+            // Decode to four RGBA byte channels regardless of source channel
+            // count, then validate dimensions before allocating every mip.
             stbi_uc* decoded = stbi_load_from_memory(
                 source, sourceBytes, &width, &height, &channels, STBI_rgb_alpha);
             if (decoded == nullptr)
@@ -176,6 +204,8 @@ export namespace kairo::assets
         }
 
     private:
+        // Reject zero, negative, or out-of-recipe maximum dimensions before
+        // casting decoder integers into unsigned size/byte calculations.
         static void ValidateDimensions(int width, int height, std::uint32_t maximumDimension)
         {
             if (width <= 0 || height <= 0 ||
