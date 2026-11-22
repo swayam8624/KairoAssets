@@ -15,6 +15,10 @@ module;
 #include <utility>
 #include <vector>
 
+// TEACHING PROVENANCE: this database owns the LAST SUCCESSFUL recipe per
+// stable AssetID. It does not own source pixels, derived cache bytes or GPU
+// uploads. ImportSourceAsset updates the record only after a typed artifact
+// has been decoded from cache or generated/published successfully.
 export module Kairo.Assets.ImportDatabase;
 
 import Kairo.Assets.AssetID;
@@ -67,6 +71,9 @@ export namespace kairo::assets
     /// project-relative input path; it is deliberately distinct from a cache
     /// path because cache layout is an A4 concern. Settings must be serialized
     /// canonically by the importer so equivalent requests compare byte-for-byte.
+    // Persistent source identity + project-relative path + plugin version
+    // + canonical settings + SHA-256 fingerprint + monotone revision.
+    // DerivedDataKey is computed from content/type/recipe, not just Revision.
     struct ImportRecord final
     {
         AssetID Asset;
@@ -107,11 +114,17 @@ export namespace kairo::assets
     /// observe the filesystem, import bytes, or create cache artifacts; those
     /// responsibilities remain explicit future services. Snapshot APIs return
     /// values, so callers never retain aliases across concurrent mutation.
+    // Concurrent readers acquire shared_lock; mutation uses unique_lock.
+    // Find/Snapshot return COPIES rather than borrowed references to map
+    // nodes, so a second importing worker cannot invalidate a caller's view.
     class ImportDatabase final
     {
     public:
         /// Input: a fully formed successful import record. Output: atomically
         /// replaces the record for its asset after registry validation.
+        // Normalize/validate before taking the exclusive lock. Replacing
+        // provenance is a successful-import publication step, not an importer
+        // plugin side effect. ImportSourceAsset owns the operation order.
         void Upsert(ImportRecord record, const AssetRegistry& registry)
         {
             record.Source = NormalizeAssetPath(record.Source);
@@ -123,6 +136,9 @@ export namespace kairo::assets
         /// Input: an arbitrary complete snapshot. Task: validate all entries
         /// before taking the lock, giving replacement a strong exception
         /// guarantee suitable for project reload.
+        // Build a fully validated detached candidate map, reject duplicate
+        // AssetIDs, then atomically swap under lock. A malformed project
+        // snapshot cannot half-replace live import history.
         void ReplaceAll(std::vector<ImportRecord> records, const AssetRegistry& registry)
         {
             RecordMap candidate;
@@ -166,6 +182,9 @@ export namespace kairo::assets
         /// Current, Missing, or Changed based solely on content identity. The
         /// root/source join is normalized and checked to retain the project
         /// boundary established by NormalizeAssetPath().
+        // Re-fingerprint current project-local source bytes, compare to last
+        // successful ImportRecord. Current/Missing/Changed says whether the
+        // input bytes moved—not whether a renderer TextureHandle is live.
         [[nodiscard]] SourceImportState Evaluate(const std::filesystem::path& projectRoot, AssetID asset) const
         {
             if (projectRoot.empty()) throw std::invalid_argument("Import evaluation requires a project root.");
