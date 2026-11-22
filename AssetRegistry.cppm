@@ -52,6 +52,10 @@ export namespace kairo::assets
         /// Input: validated registration whose dependencies already exist.
         /// Output: newly generated persistent identity.
         /// TEACHING METHOD: Register a new original asset with generated unique ID and validated portable path/dependencies. KairoEditor and import pipelines use the ID for stable references; rollback preserves registry consistency on failure.
+        // Create: normalize portable path and acquire exclusive lock before
+        // generating a unique ID. Validate metadata and typed dependencies; insert
+        // both ID and folded path maps. Catch allocation failures to remove a
+        // just-published path entry so readers cannot observe a ghost ID.
         AssetID Create(AssetRegistration registration)
         {
             AssetMetadata metadata;
@@ -92,6 +96,9 @@ export namespace kairo::assets
         /// Task: insert exactly the supplied identity. Duplicate IDs/portable
         /// paths, missing dependencies, type mismatches, and cycles are rejected.
         /// TEACHING METHOD: Import already-identifiable metadata, rejecting duplicate IDs/paths and invalid dependency graphs. Used when building a registry from trusted manifests.
+        // Insert: preserve an already-persisted AssetID (unlike Create) for manifest
+        // replay. Reject duplicate ID/path and missing or mistyped dependency;
+        // maintain both indices transactionally if metadata allocation throws.
         void Insert(AssetMetadata metadata)
         {
             metadata.Path = NormalizeAssetPath(metadata.Path);
@@ -125,6 +132,10 @@ export namespace kairo::assets
         // Transaction boundary: normalize/validate a candidate graph in
         // isolation, then atomically swap it into the registry. No reader
         // observes partial replacement. This is used by manifest loading.
+        // ReplaceAll: build and validate *both* candidate maps off to the side,
+        // including a complete cycle check. Only after all records pass do we swap
+        // both maps under one exclusive lock. A bad manifest must never partially
+        // replace live project metadata.
         void ReplaceAll(std::vector<AssetMetadata> records)
         {
             AssetMap candidateAssets;
@@ -157,6 +168,9 @@ export namespace kairo::assets
         }
 
         /// TEACHING METHOD: Read-copy of metadata by ID under a shared mutex, returning nullopt when absent. Callers do not own registry internals.
+        // Find: take a shared lock and return a detached copy. Holding a pointer into
+        // m_Assets across Remove/ReplaceAll would be unsafe; a caller owns the
+        // returned optional metadata value.
         [[nodiscard]] std::optional<AssetMetadata> Find(AssetID id) const
         {
             std::shared_lock lock(m_Mutex);
@@ -174,6 +188,9 @@ export namespace kairo::assets
         }
 
         /// TEACHING METHOD: Normalize project-relative source path and query case-folded lookup; portable collision rules matter across macOS/Windows/Linux.
+        // FindByPath: convert portable path to a case-folded key and use the
+        // secondary index to resolve a stable ID. A path is mutable metadata, not the
+        // persistent identity stored in scenes.
         [[nodiscard]] std::optional<AssetMetadata> FindByPath(const std::filesystem::path& path) const
         {
             const std::string key = PortableAssetPathKey(path);
@@ -185,6 +202,9 @@ export namespace kairo::assets
 
         template<AssetType ExpectedType>
         /// TEACHING METHOD: Checked typed-handle lookup: resolve ID then verify the declared asset type matches the handle's compile-time expectation.
+        // Resolve: the template parameter encodes the expected asset category;
+        // compare it against persisted metadata before handing data to a
+        // renderer/importer. An ID existing does not make a wrong typed handle valid.
         [[nodiscard]] AssetMetadata Resolve(AssetHandle<ExpectedType> handle) const
         {
             if (!handle.IsValid()) throw std::invalid_argument("Cannot resolve an invalid typed asset handle.");
@@ -199,6 +219,10 @@ export namespace kairo::assets
         // Persistent identity does not change when a source file moves.
         // The path map is replaced only after uniqueness/allocations pass;
         // revision increments permit downstream provenance invalidation.
+        // Move: preserve AssetID while updating spelling/path and revision. Check
+        // folded destination uniqueness and revision overflow; install the new
+        // path-map key before removing the old so exceptions cannot leave an orphaned
+        // ID. Case-only renames are handled separately.
         void Move(AssetID id, const std::filesystem::path& newPath)
         {
             std::filesystem::path normalized = NormalizeAssetPath(newPath);
@@ -235,6 +259,10 @@ export namespace kairo::assets
         // Dependency updates validate typed targets and absence of cycles
         // before publishing a new dependency list; importer artifacts
         // should not bypass this registry graph for authored references.
+        // SetDependencies: validate a copied candidate list, typed target existence
+        // and absence of cycles before publishing it. This is an authored graph edge
+        // update, not immediate re-import or GPU upload; increment revision only
+        // after validation.
         void SetDependencies(AssetID id, std::vector<AssetReference> dependencies)
         {
             std::unique_lock lock(m_Mutex);
@@ -256,6 +284,9 @@ export namespace kairo::assets
         // Unlike a cascading delete, dependent references must be
         // explicitly changed or removed first. This protects scenes
         // and materials from dangling asset identifiers.
+        // Remove: unlike a cascading deletion, refuse to erase an asset referenced by
+        // any other registered metadata. This protects materials/scenes from silently
+        // dangling stable IDs; callers must rebind or remove dependents explicitly.
         void Remove(AssetID id)
         {
             std::unique_lock lock(m_Mutex);
@@ -271,6 +302,9 @@ export namespace kairo::assets
 
         /// Output: deterministic ID-sorted metadata for manifests and tools.
         /// TEACHING METHOD: Return a detached deterministic metadata snapshot for manifest writing, tools and testing; does not expose internal hash maps.
+        // Snapshot: return ID-sorted *copies* of unordered map contents under a
+        // shared lock. Deterministic ordering matters to manifests, tests,
+        // source-control diffs and reproducible hashing.
         [[nodiscard]] std::vector<AssetMetadata> Snapshot() const
         {
             std::shared_lock lock(m_Mutex);
@@ -295,6 +329,9 @@ export namespace kairo::assets
 
         using AssetMap = std::unordered_map<AssetID, AssetMetadata, AssetIDHash>;
 
+        // ValidateDependencies: inspect every typed edge and reject missing/mistyped
+        // targets. Use reachability back to candidate.ID to detect a cycle when this
+        // record is added or updated.
         static void ValidateDependencies(const AssetMetadata& candidate, const AssetMap& assets)
         {
             for (const AssetReference& dependency : candidate.Dependencies)
@@ -308,6 +345,9 @@ export namespace kairo::assets
             }
         }
 
+        // Reaches: depth-first dependency walk with a visited set. If a path from the
+        // proposed target returns to candidate.ID, the new edge closes a cycle.
+        // Visited tracking bounds the repeated traversal of shared subgraphs.
         [[nodiscard]] static bool Reaches(AssetID current, AssetID target, const AssetMap& assets,
             std::unordered_set<AssetID, AssetIDHash>& visited)
         {
@@ -320,6 +360,10 @@ export namespace kairo::assets
             return false;
         }
 
+        // EnsureRevisionCanIncrement: reject uint64_t exhaustion instead of
+        // wraparound. Revision is a monotonic invalidation signal to downstream
+        // provenance/cache code, not an arithmetic quantity that may safely roll
+        // over.
         static void EnsureRevisionCanIncrement(const AssetMetadata& metadata)
         {
             if (metadata.Revision == std::numeric_limits<std::uint64_t>::max())
