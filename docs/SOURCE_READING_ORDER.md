@@ -10,6 +10,8 @@ Read the [complete asset-pipeline walkthrough](ASSET_PIPELINE_WALKTHROUGH.md)
 alongside these files to understand stable identity, transactional metadata,
 cache lifetime and GPU upload boundaries.
 
+**Cross-repository integration lab:** [Stable AssetIDs, derived cache and shared Editor/Player GPU binding lifetime](https://github.com/swayam8624/KairoGameEngine/blob/main/docs/ASSET_SCENE_TO_GPU_LIFETIME_LAB.md). Read the authored/CPU contracts before following the native GPU backend; source inspection is not a native test result.
+
 **Cross-subsystem texture laboratory:** [From TextureArtifactData to Vulkan/Metal GPU resources](https://github.com/swayam8624/KairoRenderer/blob/main/docs/TEXTURE_UPLOAD_AND_RENDER_TARGET_TRANSITIONS_LAB.md). Read `TextureArtifact.cppm` and its tests before studying GPU image ownership, color-space interpretation and native layout barriers.
 
 **Worked practice:** [Asset identity, registry locking, graph cycle detection and atomic replacement](ASSET_REGISTRY_TRANSACTIONS_AND_GRAPH_EXERCISES.md). Trace source manifest through importer recipe and renderer handle without conflating their lifetimes.
