@@ -10,6 +10,8 @@ Read the [complete asset-pipeline walkthrough](ASSET_PIPELINE_WALKTHROUGH.md)
 alongside these files to understand stable identity, transactional metadata,
 cache lifetime and GPU upload boundaries.
 
+**Worked practice:** [Asset identity, registry locking, graph cycle detection and atomic replacement](ASSET_REGISTRY_TRANSACTIONS_AND_GRAPH_EXERCISES.md). Trace source manifest through importer recipe and renderer handle without conflating their lifetimes.
+
 ### Part A — Portable identity and safe registry operations
 
 1. [`CMakeLists.txt`](../CMakeLists.txt) and [`KairoAssets.cppm`](../KairoAssets.cppm): C++23 build and exported API surface.
