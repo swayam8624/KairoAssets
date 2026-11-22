@@ -9,6 +9,8 @@ import Kairo.Assets.TextureArtifact;
 
 namespace
 {
+    // Deterministic fixture byte generator: create arbitrary raw pixel blobs
+    // sized for the declared mip. No image decoder or GPU is involved.
     [[nodiscard]] std::vector<std::byte> Bytes(std::size_t count, std::uint8_t seed = 0u)
     {
         std::vector<std::byte> result(count);
@@ -18,6 +20,9 @@ namespace
     }
 }
 
+// TEACHING TEST: canonical 2D texture format/mip metadata survives
+// SerializeTextureArtifactData -> ParseTextureArtifactData byte-for-byte.
+// Renderer upload depends on this stable size and semantic interpretation.
 TEST_CASE("Texture artifacts round trip canonical mip chains")
 {
     using namespace kairo::assets;
@@ -35,6 +40,8 @@ TEST_CASE("Texture artifacts round trip canonical mip chains")
     CHECK(ParseTextureDerivedArtifact(artifact) == texture);
 }
 
+// TEACHING TEST: byte-correct but wrong width/height progression is invalid.
+// VkBufferImageCopy relies on canonical authored mip dimensions.
 TEST_CASE("Texture artifacts reject noncanonical mip dimensions")
 {
     using namespace kairo::assets;
@@ -46,6 +53,8 @@ TEST_CASE("Texture artifacts reject noncanonical mip dimensions")
     CHECK_THROWS(ValidateTextureArtifactData(texture));
 }
 
+// TEACHING TEST: normal and numeric data must avoid SRGB hardware decode;
+// the semantic/colour-space contract is checked before GPU creation.
 TEST_CASE("Normal and data textures require linear colour space")
 {
     using namespace kairo::assets;
@@ -58,6 +67,8 @@ TEST_CASE("Normal and data textures require linear colour space")
     CHECK_NOTHROW(ValidateTextureArtifactData(texture));
 }
 
+// TEACHING TEST: strict versioned payload decoding rejects incomplete and
+// surplus bytes rather than silently creating an untrusted GPU upload.
 TEST_CASE("Texture parser rejects truncation and trailing bytes")
 {
     using namespace kairo::assets;
