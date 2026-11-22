@@ -1,3 +1,22 @@
+// TEACHING ENTRY POINT: Public C++23 umbrella for persistent asset identity,
+// source metadata, import pipelines, derived artifacts and editable authoring.
+//
+// Source-to-render flow:
+//   AssetID/Registry/Manifest: stable identity + dependency/path invariants
+//   Fingerprint/ImportDatabase: source-content revision/provenance detection
+//   ImporterRegistry + concrete importers: validated source decoding
+//   DerivedDataCache/DerivedArtifact: immutable, content-keyed CPU artifacts
+//   Mesh/Material/Texture/GltfScene artifacts: portable runtime payloads
+//   Renderer::AssetAdapters: convert *those* payloads into GPU handles
+//
+// Exporting a module does not load content, create a Vulkan resource, or
+// start file observation. SourceWatcher is an optional explicitly instantiated
+// service. Source asset references remain stable across path changes; renderer
+// handles are transient and owned by the graphics backend.
+//
+// Preserve third-party attribution for imported media and external libraries:
+// an MIT code license does not grant rights to all files a user imports.
+// See docs/SOURCE_READING_ORDER.md and tests/AssetTests.cpp.
 export module Kairo.Assets;
 
 export import Kairo.Assets.Types;
