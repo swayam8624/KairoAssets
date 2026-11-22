@@ -53,6 +53,9 @@ namespace
     }
 }
 
+//  Use a 2x2 RGB corner fixture, generate a 1x1 mip with sRGB-aware box filtering,
+// and round-trip its typed binary artifact. This is CPU reference evidence, not a
+// native GPU color-sample test.
 TEST_CASE("Texture artifact generates canonical colour-aware mip chains")
 {
     using namespace kairo::assets;
@@ -70,6 +73,8 @@ TEST_CASE("Texture artifact generates canonical colour-aware mip chains")
     CHECK(ParseTextureDerivedArtifact(MakeTextureDerivedArtifact(texture)) == texture);
 }
 
+//  Give StbTextureImporter a real tiny uncompressed TGA buffer; decode it under an
+// explicit canonical recipe and assert 2x2 source + 1x1 mip plus SRGB interpretation.
 TEST_CASE("STB texture importer decodes TGA and applies deterministic settings")
 {
     using namespace kairo::assets;
@@ -87,6 +92,8 @@ TEST_CASE("STB texture importer decodes TGA and applies deterministic settings")
     CHECK(texture.ColorSpace == TextureColorSpace::SRGB);
 }
 
+//  Round-trip scalar PBR/alpha values and two distinct typed TextureAssetHandle IDs.
+// No GPU Material/descriptor was created by serializing this artifact.
 TEST_CASE("Material artifact round trips PBR factors and typed texture references")
 {
     using namespace kairo::assets;
@@ -104,6 +111,9 @@ TEST_CASE("Material artifact round trips PBR factors and typed texture reference
     CHECK(ParseMaterialDerivedArtifact(MakeMaterialDerivedArtifact(material)) == material);
 }
 
+//  Parse an embedded-data glTF triangle with a translated root node (2,3,4); keep
+// node/primitive identity and indices for later renderer adaptation instead of
+// flattening into anonymous vertices.
 TEST_CASE("glTF importer produces a hierarchy-preserving static scene artifact")
 {
     using namespace kairo::assets;
@@ -145,6 +155,9 @@ TEST_CASE("glTF importer produces a hierarchy-preserving static scene artifact")
     CHECK(scene.Primitives[0].Mesh.Indices == std::vector<std::uint32_t>{ 0u, 1u, 2u });
 }
 
+//  Check name/version strings required by ImportSourceAsset and cache recipes; adding
+// a compatible implementation under a different version must be an explicit contract
+// decision.
 TEST_CASE("Built-in importer registry exposes exact reproducible identities")
 {
     using namespace kairo::assets;
