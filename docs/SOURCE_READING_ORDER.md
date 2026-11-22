@@ -55,7 +55,7 @@ cache; record the entire canonical recipe.
 
 **Exercise:** follow a glTF material texture from a safe project-local URI,
 through an importer and artifact, to
-[KairoRenderer AssetAdapters](https://github.com/swayam8624/KairoRenderer/blob/docs/teaching-walkthrough-20261121/AssetAdapters.cppm).
+[KairoRenderer AssetAdapters](https://github.com/swayam8624/KairoRenderer/blob/main/AssetAdapters.cppm).
 Locate where persistent AssetID becomes a renderer-owned TextureHandle.
 
 ### Part D — Editable content versus generated artifacts
