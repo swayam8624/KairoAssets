@@ -10,6 +10,8 @@ Read the [complete asset-pipeline walkthrough](ASSET_PIPELINE_WALKTHROUGH.md)
 alongside these files to understand stable identity, transactional metadata,
 cache lifetime and GPU upload boundaries.
 
+**Cross-subsystem texture laboratory:** [From TextureArtifactData to Vulkan/Metal GPU resources](https://github.com/swayam8624/KairoRenderer/blob/main/docs/TEXTURE_UPLOAD_AND_RENDER_TARGET_TRANSITIONS_LAB.md). Read `TextureArtifact.cppm` and its tests before studying GPU image ownership, color-space interpretation and native layout barriers.
+
 **Worked practice:** [Asset identity, registry locking, graph cycle detection and atomic replacement](ASSET_REGISTRY_TRANSACTIONS_AND_GRAPH_EXERCISES.md). Trace source manifest through importer recipe and renderer handle without conflating their lifetimes.
 
 ### Part A — Portable identity and safe registry operations
