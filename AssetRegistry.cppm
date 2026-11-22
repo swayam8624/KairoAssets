@@ -1,4 +1,19 @@
-// TEACHING MAP: Asset identity/metadata registry underpins manifests, import provenance and stable references. EngineCore stores IDs, Editor authors them, and Renderer converts validated artifacts to GPU-specific resources.
+// TEACHING MAP: AssetRegistry is the authoritative metadata/dependency
+// database. It indexes AssetID and normalized, case-folded portable paths;
+// metadata references are returned as *copies* so a reader cannot outlive
+// the lock protecting the maps. The importer/renderer own artifact bytes,
+// decoded content and native GPU resources separately.
+//
+// Writer operations take an exclusive lock, and reads take a shared lock.
+// ReplaceAll first constructs/validates new maps (including dependency
+// cycles) and then swaps them under one lock: manifest parse failures
+// cannot leave a partially replaced live registry. Move preserves AssetID
+// while changing path/revision, and Remove rejects any remaining dependent.
+// A dependency is a typed ID, never an implicit filesystem path.
+//
+// Downstream: AssetManifest serializes detached snapshots; ImportDatabase
+// tracks source fingerprints; EngineCore scenes and Renderer's AssetAdapters
+// resolve identities to artifacts and GPU handles. See tests/AssetTests.cpp.
 module;
 
 #include <algorithm>
@@ -107,6 +122,9 @@ export namespace kairo::assets
         /// unchanged, providing the strong exception guarantee required by
         /// project reload and editor recovery workflows.
         /// TEACHING METHOD: Validate a complete candidate manifest off to the side, then atomically replace the live registry under lock. No partially loaded asset graph becomes visible.
+        // Transaction boundary: normalize/validate a candidate graph in
+        // isolation, then atomically swap it into the registry. No reader
+        // observes partial replacement. This is used by manifest loading.
         void ReplaceAll(std::vector<AssetMetadata> records)
         {
             AssetMap candidateAssets;
@@ -178,6 +196,9 @@ export namespace kairo::assets
         /// Input: a new portable project path.
         /// Output: increments the metadata revision after an atomic path-index update.
         /// TEACHING METHOD: Move one asset's portable path, validate uniqueness and bump revision. Stable AssetID remains the same for scene references.
+        // Persistent identity does not change when a source file moves.
+        // The path map is replaced only after uniqueness/allocations pass;
+        // revision increments permit downstream provenance invalidation.
         void Move(AssetID id, const std::filesystem::path& newPath)
         {
             std::filesystem::path normalized = NormalizeAssetPath(newPath);
@@ -211,6 +232,9 @@ export namespace kairo::assets
         /// Task: replace dependencies atomically after checking existence,
         /// declared types, duplicates, self-reference, and graph cycles.
         /// TEACHING METHOD: Replace an asset's dependency list only after validating referential integrity and cycle constraints; then update revision.
+        // Dependency updates validate typed targets and absence of cycles
+        // before publishing a new dependency list; importer artifacts
+        // should not bypass this registry graph for authored references.
         void SetDependencies(AssetID id, std::vector<AssetReference> dependencies)
         {
             std::unique_lock lock(m_Mutex);
@@ -229,6 +253,9 @@ export namespace kairo::assets
         /// Task: prevent accidental dangling references; callers must update or
         /// remove dependents explicitly before deleting the dependency.
         /// TEACHING METHOD: Reject removal of an asset still depended on by others, preventing broken material/mesh/scene references.
+        // Unlike a cascading delete, dependent references must be
+        // explicitly changed or removed first. This protects scenes
+        // and materials from dangling asset identifiers.
         void Remove(AssetID id)
         {
             std::unique_lock lock(m_Mutex);
