@@ -1,5 +1,10 @@
 # KairoAssets
 
+**Learn through the source:** [complete reading order](docs/SOURCE_READING_ORDER.md) · [asset identity → importer → cache → renderer walkthrough](docs/ASSET_PIPELINE_WALKTHROUGH.md).
+
+Start by distinguishing persistent identities from paths, CPU artifacts,
+content-addressed cache entries, and renderer-owned GPU handles.
+
 `KairoAssets` is Kairo's backend-neutral asset identity, metadata registry, and
 project manifest layer. It solves the persistent-reference problem between
 authoring tools and runtime systems without owning Vulkan objects, decoded mesh
@@ -43,7 +48,8 @@ services built on this contract; they are not silently simulated here.
 ## Build
 
 ```bash
-cd /Users/swayamsingal/Desktop/Programming/Kairo/KairoAssets
+git clone https://github.com/swayam8624/KairoAssets.git
+cd KairoAssets
 cmake -S . -B build -G Ninja \
   -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++
 cmake --build build
