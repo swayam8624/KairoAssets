@@ -1,3 +1,18 @@
+// TEACHING MODULE: glTF 2 import uses cgltf as a parsing dependency and
+// converts validated buffers/accessors/nodes into portable KairoAssets
+// GltfSceneArtifact and mesh payloads. The importer is intentionally CPU-side;
+// the renderer's AssetAdapters choose how those artifacts are uploaded.
+//
+// DataOwner wraps cgltf_data in RAII so parse errors/early exceptions still
+// release C allocations. External dependency URIs must be checked before
+// filesystem access: reject unsafe traversal and absolute outside-project
+// paths. Buffer view bounds, accessor layout, transform conventions and
+// per-primitive materials must match GltfSceneArtifact's consumer contract.
+//
+// The module retains versioned importer identities (V1 and newer v2); an
+// existing project must select its recorded importer/version rather than
+// quietly receiving a different artifact recipe. The upstream cgltf header
+// retains its own license and attribution.
 module;
 
 #define CGLTF_IMPLEMENTATION
@@ -30,6 +45,9 @@ export namespace kairo::assets
 {
     namespace gltf_importer_detail
     {
+        // RAII guards cgltf_data across early returns/exceptions. Owned C
+        // memory is released once; do not retain pointers into it after
+        // the importer constructs portable C++ artifact values.
         class DataOwner final
         {
         public:
@@ -110,7 +128,10 @@ export namespace kairo::assets
             return true;
         }
 
+        // glTF external URI references are not automatically trusted:
+        // normalize/check paths before touching files relative to source.
         inline void ValidateLocalDependencyUri(
+
             const char* rawUri,
             const std::filesystem::path& sourcePath,
             std::string_view role)
