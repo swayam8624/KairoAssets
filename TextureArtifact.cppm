@@ -12,6 +12,12 @@ module;
 #include <utility>
 #include <vector>
 
+// TEACHING CROSS-REPO CONTRACT: this is the CPU-owned canonical texture
+// representation consumed by KairoRenderer::VulkanTexture2D and MetalBackend.
+// Pixel format, semantic, color space and canonical mip dimensions are
+// validated HERE, before GPU allocation. VulkanTexture uploads these bytes
+// unchanged and maps their color-space meaning to native VkFormat.
+// See KairoRenderer/docs/TEXTURE_UPLOAD_AND_RENDER_TARGET_TRANSITIONS_LAB.md.
 export module Kairo.Assets.TextureArtifact;
 
 import Kairo.Assets.BinaryFormat;
@@ -20,6 +26,8 @@ import Kairo.Assets.Types;
 
 export namespace kairo::assets
 {
+    // Number/precision of serialized channels, not a GPU image handle.
+    // R8/RG8/RGBA8 are normalized byte encodings; RGBA16Float is 8 B/px.
     enum class TexturePixelFormat : std::uint8_t
     {
         R8 = 1u,
@@ -28,6 +36,8 @@ export namespace kairo::assets
         RGBA16Float = 4u
     };
 
+    // SRGB byte RGB channels require decoding to linear for lighting and
+    // correct prefiltered averages; numeric data/normal/HDR remain Linear.
     enum class TextureColorSpace : std::uint8_t
     {
         Linear = 1u,
@@ -42,6 +52,9 @@ export namespace kairo::assets
         HDR = 4u
     };
 
+    // Owned tightly packed row-major texel bytes for ONE explicit mip.
+    // The renderer does not build mipmaps during upload, so all needed levels
+    // must already exist in TextureArtifactData::Mips.
     struct TextureMipLevel final
     {
         std::uint32_t Width = 0u;
@@ -82,6 +95,9 @@ export namespace kairo::assets
             throw std::invalid_argument("Texture pixel format is unsupported.");
         }
 
+        // Validate positive capped dimensions and safely calculate required
+        // payload bytes before allocating a CPU array or emitting a mip.
+        // The derived-artifact global byte budget is independent of GPU VRAM.
         [[nodiscard]] inline std::size_t CheckedPixelBytes(
             std::uint32_t width, std::uint32_t height, TexturePixelFormat format)
         {
@@ -94,12 +110,16 @@ export namespace kairo::assets
             return static_cast<std::size_t>(bytes);
         }
 
+        // IEC-style piecewise transfer: average color intensities in linear
+        // space, not directly in sRGB 8-bit encoded values.
         [[nodiscard]] inline float SrgbToLinear(float value) noexcept
         {
             return value <= 0.04045f ? value / 12.92f
                 : std::pow((value + 0.055f) / 1.055f, 2.4f);
         }
 
+        // Re-encode the filtered linear color for storage in an SRGB artifact.
+        // Clamp avoids invalid out-of-range byte values at the output.
         [[nodiscard]] inline float LinearToSrgb(float value) noexcept
         {
             value = std::clamp(value, 0.0f, 1.0f);
@@ -116,6 +136,10 @@ export namespace kairo::assets
         /// Converts a finite IEEE-754 binary32 value to binary16 with
         /// round-to-nearest-even. Values outside binary16's finite range are
         /// rejected by the caller rather than silently becoming infinity.
+        // Convert a finite Float32 bit pattern to binary16 using round-to-
+        // nearest-even; the calling WriteHalf validates representability.
+        // Packed binary16 bytes are later copied unchanged into Vulkan
+        // VK_FORMAT_R16G16B16A16_SFLOAT or matching Metal storage.
         [[nodiscard]] inline std::uint16_t FloatToHalf(float value) noexcept
         {
             const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
@@ -135,6 +159,9 @@ export namespace kairo::assets
             return static_cast<std::uint16_t>(sign | ((rounded - 0x3800'0000u) >> 13u));
         }
 
+        // Refuse NaN, Infinity or magnitudes beyond 65504 before serializing
+        // two little-endian bytes of one half float. Avoid silently encoding
+        // invalid radiance in a purported finite HDR artifact.
         inline void WriteHalf(std::vector<std::byte>& bytes, float value)
         {
             if (!std::isfinite(value) || std::abs(value) > 65'504.0f)
@@ -144,6 +171,9 @@ export namespace kairo::assets
             bytes.push_back(std::byte{ static_cast<std::uint8_t>(half >> 8u) });
         }
 
+        // Enforce semantic-color-space combinations: normal/data/HDR must
+        // be linear; HDR also requires RGBA16Float. Color is allowed SRGB.
+        // These rules are what make SelectFormat in KairoRenderer safe.
         inline void ValidateEnums(const TextureArtifactData& texture)
         {
             (void)BytesPerPixel(texture.Format);
@@ -169,6 +199,10 @@ export namespace kairo::assets
         }
     }
 
+    // Validate 1..16 mips, canonical down-to-1 extents, exact bytes per
+    // pixel and bounded cumulative payload. A malformed mip is rejected
+    // before VulkanHostBuffer/VkImage allocations occur downstream.
+    // Dimension chain uses max(1, previous/2) on both axes.
     inline void ValidateTextureArtifactData(const TextureArtifactData& texture)
     {
         using namespace texture_artifact_detail;
@@ -204,6 +238,11 @@ export namespace kairo::assets
     /// Task: provide one deterministic CPU reference path for importers, tests,
     /// and headless asset workers. sRGB colors are averaged in linear space;
     /// normal maps are averaged and renormalized before re-encoding.
+    // Seed the full-resolution RGBA8 level; box-filter 2x2 neighborhoods
+    // into successively smaller mips until 1x1. SRGB colors are decoded
+    // BEFORE averaging then re-encoded; normal vectors are remapped to
+    // [-1,1], averaged, renormalized and re-encoded for shader sampling.
+    // Pixel alpha is averaged as linear coverage/value, not SRGB color.
     [[nodiscard]] inline TextureArtifactData BuildTextureMipChainRGBA8(
         std::uint32_t width, std::uint32_t height, std::span<const std::byte> rgba,
         TextureColorSpace colorSpace = TextureColorSpace::SRGB, bool normalMap = false)
@@ -284,6 +323,9 @@ export namespace kairo::assets
     /// Output: a linear RGBA16F mip chain using deterministic box filtering.
     /// Degeneracy: values outside the finite binary16 range are rejected so
     /// import never silently clips authored radiance or writes infinities.
+    // Build a linear HDR RGBA16Float mip pyramid from Float32 radiance,
+    // using Float32 intermediate box averages and finite binary16 writes.
+    // The renderer receives finished half-byte payloads and only uploads them.
     [[nodiscard]] inline TextureArtifactData BuildTextureMipChainRGBA32Float(
         std::uint32_t width, std::uint32_t height, std::span<const float> rgba)
     {
@@ -329,6 +371,9 @@ export namespace kairo::assets
         return result;
     }
 
+    // Versioned KTEXT0001 binary payload: magic, u32 version, format/space/
+    // semantic/mipCount bytes and (width,height,payloadSize,pixels) per mip.
+    // Runs ValidateTextureArtifactData first so emitted bytes are canonical.
     [[nodiscard]] inline std::vector<std::byte> SerializeTextureArtifactData(
         const TextureArtifactData& texture)
     {
@@ -353,6 +398,9 @@ export namespace kairo::assets
         return std::move(writer).TakeBytes();
     }
 
+    // Decode a bounded owned CPU record, require exact EOF (no trailing
+    // bytes), and validate the complete semantic+mip chain after parsing.
+    // Do NOT expose raw payload pointers as GPU texture storage.
     [[nodiscard]] inline TextureArtifactData ParseTextureArtifactData(
         std::span<const std::byte> payload)
     {
@@ -386,6 +434,9 @@ export namespace kairo::assets
         return texture;
     }
 
+    // Wrap the validated texture payload in a typed derived-asset envelope:
+    // AssetType::Texture2D, version 1, format "kairo.texture2d.v1".
+    // Asset registry identity/cache policy lives outside this CPU codec.
     [[nodiscard]] inline DerivedArtifact MakeTextureDerivedArtifact(
         const TextureArtifactData& texture)
     {
@@ -393,6 +444,8 @@ export namespace kairo::assets
             SerializeTextureArtifactData(texture) };
     }
 
+    // Validate the outer derived-artifact envelope and its explicit type/
+    // version/format before decoding the inner KTEXT0001 bytes and pixels.
     [[nodiscard]] inline TextureArtifactData ParseTextureDerivedArtifact(
         const DerivedArtifact& artifact)
     {
