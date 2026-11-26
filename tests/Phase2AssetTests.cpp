@@ -1,4 +1,7 @@
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -10,6 +13,8 @@
 import Kairo.Assets.AssetID;
 import Kairo.Assets.BuiltinImporters;
 import Kairo.Assets.DerivedArtifact;
+import Kairo.Assets.DerivedDataCache;
+import Kairo.Assets.Registry;
 import Kairo.Assets.GltfImporter;
 import Kairo.Assets.GltfSceneArtifact;
 import Kairo.Assets.ImportDatabase;
@@ -156,4 +161,58 @@ TEST_CASE("Built-in importer registry exposes exact reproducible identities")
     CHECK(registry.Contains("kairo.audio.wav", "1"));
     CHECK(registry.Contains("kairo.gltf.scene", "1"));
     CHECK(registry.Contains("kairo.gltf.scene", "2"));
+}
+
+TEST_CASE("Compound glTF dependencies invalidate cache and report stale or missing files")
+{
+    using namespace kairo::assets;
+    const auto root=std::filesystem::temp_directory_path()/("kairo-compound-"+GenerateAssetID().ToString());
+    struct Cleanup{std::filesystem::path Root;~Cleanup(){std::error_code ec;std::filesystem::remove_all(Root,ec);}} cleanup{root};
+    std::filesystem::create_directories(root/"Models");
+    const std::string source=R"json({
+        "asset":{"version":"2.0"},
+        "buffers":[{"byteLength":42,"uri":"mesh%20data.bin"}],
+        "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":6}],
+        "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[2,1,0]},
+        {"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}],
+        "meshes":[{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],
+        "nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}],"scene":0
+    })json";
+    {std::ofstream out(root/"Models/model.gltf",std::ios::binary);out<<source;}
+    const auto writeBuffer=[&](float x)
+    {
+        std::ofstream out(root/"Models/mesh data.bin",std::ios::binary|std::ios::trunc);
+        const std::array<float,9> positions{0,0,0,x,0,0,0,1,0};
+        const std::array<std::uint16_t,3> indices{0,1,2};
+        out.write(reinterpret_cast<const char*>(positions.data()),sizeof(positions));
+        out.write(reinterpret_cast<const char*>(indices.data()),sizeof(indices));
+    };
+    writeBuffer(1.f);
+    const auto deps=DiscoverGltfExternalDependencies(Bytes(source),root/"Models/model.gltf");
+    REQUIRE(deps.size()==1);
+    CHECK(deps.front().Relative==std::filesystem::path("mesh data.bin"));
+    CHECK_FALSE(deps.front().Image);
+    CHECK_THROWS(GltfLocalUriPath("%2e%2e/escape.bin"));
+    CHECK_THROWS(GltfLocalUriPath("https://example.org/file.bin"));
+    AssetRegistry registry;
+    const auto id=registry.Create({AssetType::Scene,AssetOrigin::SourceFile,"Models/model.gltf","kairo.gltf.scene",{}});
+    GltfSceneImporter importer;
+    ImportRecord record{id,"Models/model.gltf",importer.Identifier(),importer.Version(),{},{},1};
+    ImportDatabase db;
+    DerivedDataCache cache(root/"Cache");
+    const auto first=ImportSourceAsset(root,record,importer,registry,db,cache);
+    CHECK_FALSE(first.CacheHit);
+    CHECK(db.Evaluate(root,id)==SourceImportState::Current);
+    CHECK(ImportSourceAsset(root,record,importer,registry,db,cache).CacheHit);
+    writeBuffer(2.f);
+    CHECK(db.Evaluate(root,id)==SourceImportState::Changed);
+    const auto second=ImportSourceAsset(root,record,importer,registry,db,cache);
+    CHECK_FALSE(second.CacheHit);
+    CHECK(first.Key!=second.Key);
+    CHECK(db.At(id).Revision==2);
+    CHECK(ParseGltfSceneDerivedArtifact(first.Artifact)!=ParseGltfSceneDerivedArtifact(second.Artifact));
+    std::filesystem::remove(root/"Models/mesh data.bin");
+    CHECK(db.Evaluate(root,id)==SourceImportState::Missing);
+    CHECK_THROWS(ImportSourceAsset(root,record,importer,registry,db,cache));
+    CHECK(db.At(id).Revision==2);
 }
