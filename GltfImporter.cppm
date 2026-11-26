@@ -26,6 +26,7 @@ import Kairo.Assets.GltfSceneArtifact;
 import Kairo.Assets.Importer;
 import Kairo.Assets.MeshArtifact;
 import Kairo.Assets.Types;
+import Kairo.Assets.Metadata;
 
 export namespace kairo::assets
 {
