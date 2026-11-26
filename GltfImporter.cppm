@@ -529,6 +529,20 @@ export namespace kairo::assets
         }
     }
 
+    [[nodiscard]] inline std::filesystem::path GltfLocalUriPath(std::string_view uri)
+    {
+        if(uri.empty()||uri.starts_with("data:")||uri.find(':')!=std::string_view::npos||
+            uri.find('?')!=std::string_view::npos||uri.find('#')!=std::string_view::npos)
+            throw std::invalid_argument("Expected a local glTF file URI.");
+        const auto decoded=gltf_importer_detail::DecodeLocalUriPath(uri);
+        if(decoded.find('\\')!=std::string::npos)
+            throw std::invalid_argument("glTF URI must use forward slashes.");
+        const std::filesystem::path path(decoded);
+        for(const auto& part:path)
+            if(part=="..")throw std::invalid_argument("glTF URI escapes source directory.");
+        return NormalizeAssetPath(path);
+    }
+
     // Enumerate exactly the referenced local files, before importing or
     // looking up a cached artifact. Buffer and image dependencies share a
     // path identity; images are also eligible for texture registration.
@@ -555,7 +569,7 @@ export namespace kairo::assets
         const auto append=[&](const char* uri,bool image)
         {
             if(!RequiresSourcePath(uri))return;
-            const auto relative=NormalizeAssetPath(std::filesystem::path(DecodeLocalUriPath(uri)));
+            const auto relative=GltfLocalUriPath(uri);
             // Use the same portable case-folded identity as AssetRegistry.
             const auto key=PortableAssetPathKey(relative);
             auto [it,inserted]=unique.try_emplace(key,GltfExternalDependency{relative,image});
