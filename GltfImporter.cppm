@@ -2,6 +2,7 @@ module;
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
+#include "GltfImageDataUri.hpp"
 
 #include <algorithm>
 #include <array>
@@ -224,7 +225,13 @@ export namespace kairo::assets
             const cgltf_image& image = *view.texture->image;
             if (image.uri != nullptr && *image.uri != '\0')
             {
-                binding.Uri = image.uri;
+                if(std::string_view(image.uri).starts_with("data:"))
+                {
+                    auto decoded=gltf_image_detail::DecodeDataImage(image.uri);
+                    binding.MimeType=decoded.Mime;
+                    binding.EmbeddedBytes=std::move(decoded.Bytes);
+                }
+                else binding.Uri = image.uri;
                 return binding;
             }
 
@@ -528,6 +535,11 @@ export namespace kairo::assets
             return primitive;
         }
     }
+
+    // Legacy cached artifacts can still contain small data URIs. Decode
+    // those with the identical checked implementation used by the importer.
+    [[nodiscard]] inline std::vector<std::byte> DecodeGltfImageDataUri(std::string_view uri)
+    {return gltf_image_detail::DecodeDataImage(uri).Bytes;}
 
     [[nodiscard]] inline std::filesystem::path GltfLocalUriPath(std::string_view uri)
     {
