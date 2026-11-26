@@ -67,6 +67,13 @@ export namespace kairo::assets
     /// project-relative input path; it is deliberately distinct from a cache
     /// path because cache layout is an A4 concern. Settings must be serialized
     /// canonically by the importer so equivalent requests compare byte-for-byte.
+    struct ImportDependencyFingerprint final
+    {
+        std::filesystem::path Path;
+        AssetFingerprint Fingerprint;
+        friend bool operator==(const ImportDependencyFingerprint&,const ImportDependencyFingerprint&)=default;
+    };
+
     struct ImportRecord final
     {
         AssetID Asset;
@@ -76,6 +83,7 @@ export namespace kairo::assets
         std::string CanonicalSettings;
         AssetFingerprint SourceFingerprint;
         std::uint64_t Revision = 1u;
+        std::vector<ImportDependencyFingerprint> Dependencies{};
 
         friend bool operator==(const ImportRecord&, const ImportRecord&) = default;
     };
@@ -95,6 +103,8 @@ export namespace kairo::assets
         ValidateImporterVersion(record.ImporterVersion);
         ValidateCanonicalImporterSettings(record.CanonicalSettings);
         if (record.Revision == 0u) throw std::invalid_argument("Import record revision must be positive.");
+        if(record.Dependencies.size()>8192)throw std::length_error("Import dependency limit exceeded.");
+        for(const auto& dependency:record.Dependencies)(void)NormalizeAssetPath(dependency.Path);
 
         const AssetMetadata metadata = registry.At(record.Asset);
         if (metadata.Origin != AssetOrigin::SourceFile)
@@ -173,8 +183,15 @@ export namespace kairo::assets
             const std::filesystem::path source = projectRoot / record.Source;
             std::error_code error;
             if (!std::filesystem::is_regular_file(source, error) || error) return SourceImportState::Missing;
-            return FingerprintFile(source) == record.SourceFingerprint
-                ? SourceImportState::Current : SourceImportState::Changed;
+            if(FingerprintFile(source)!=record.SourceFingerprint)return SourceImportState::Changed;
+            for(const auto& dependency:record.Dependencies)
+            {
+                const auto path=projectRoot/dependency.Path;
+                if(!std::filesystem::is_regular_file(path,error)||error||std::filesystem::is_symlink(path,error)||error)
+                    return SourceImportState::Missing;
+                if(FingerprintFile(path)!=dependency.Fingerprint)return SourceImportState::Changed;
+            }
+            return SourceImportState::Current;
         }
 
         [[nodiscard]] std::size_t Size() const
