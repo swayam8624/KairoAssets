@@ -9,6 +9,7 @@ module;
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <limits>
 #include <system_error>
 #include <span>
@@ -527,11 +528,63 @@ export namespace kairo::assets
         }
     }
 
+    // Enumerate exactly the referenced local files, before importing or
+    // looking up a cached artifact. Buffer and image dependencies share a
+    // path identity; images are also eligible for texture registration.
+    struct GltfExternalDependency final
+    {
+        std::filesystem::path Relative;
+        bool Image=false;
+    };
+
+    [[nodiscard]] inline std::vector<GltfExternalDependency> DiscoverGltfExternalDependencies(
+        std::span<const std::byte> bytes,const std::filesystem::path& source)
+    {
+        using namespace gltf_importer_detail;
+        cgltf_options options{};
+        cgltf_data* parsed=nullptr;
+        const auto result=cgltf_parse(&options,bytes.data(),bytes.size(),&parsed);
+        if(result!=cgltf_result_success)
+            throw std::invalid_argument("Unable to discover glTF dependencies: "+ResultMessage(result));
+        DataOwner owner(parsed);
+        if(parsed->buffers_count>4096||parsed->images_count>4096)
+            throw std::length_error("glTF dependency count exceeds safety limit.");
+        ValidateExternalDependencies(*parsed,source);
+        std::map<std::string,GltfExternalDependency> unique;
+        const auto append=[&](const char* uri,bool image)
+        {
+            if(!RequiresSourcePath(uri))return;
+            const auto relative=NormalizeAssetPath(std::filesystem::path(DecodeLocalUriPath(uri)));
+            // Use the same portable case-folded identity as AssetRegistry.
+            const auto key=PortableAssetPathKey(relative);
+            auto [it,inserted]=unique.try_emplace(key,GltfExternalDependency{relative,image});
+            if(!inserted)
+            {
+                if(it->second.Relative!=relative)
+                    throw std::invalid_argument("glTF dependencies contain ambiguous case aliases.");
+                it->second.Image|=image;
+            }
+        };
+        for(cgltf_size i=0;i<parsed->buffers_count;++i)append(parsed->buffers[i].uri,false);
+        for(cgltf_size i=0;i<parsed->images_count;++i)append(parsed->images[i].uri,true);
+        std::vector<GltfExternalDependency> dependencies;
+        dependencies.reserve(unique.size());
+        for(auto& [key,entry]:unique)dependencies.push_back(std::move(entry));
+        return dependencies;
+    }
+
     class GltfSceneImporter final : public AssetImporter
     {
     public:
         [[nodiscard]] std::string Identifier() const override { return "kairo.gltf.scene"; }
         [[nodiscard]] std::string Version() const override { return "2"; }
+        [[nodiscard]] std::vector<std::filesystem::path> DiscoverDependencies(const ImportRequest& request) const override
+        {
+            std::vector<std::filesystem::path> paths;
+            for(const auto& entry:DiscoverGltfExternalDependencies(request.SourceBytes,request.SourcePath))
+                paths.push_back(entry.Relative);
+            return paths;
+        }
 
         [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
         {
@@ -804,6 +857,8 @@ export namespace kairo::assets
     public:
         [[nodiscard]] std::string Identifier() const override { return "kairo.gltf.scene"; }
         [[nodiscard]] std::string Version() const override { return "1"; }
+        [[nodiscard]] std::vector<std::filesystem::path> DiscoverDependencies(const ImportRequest& request) const override
+        {return GltfSceneImporter{}.DiscoverDependencies(request); }
 
         [[nodiscard]] DerivedArtifact Import(const ImportRequest& request) const override
         {
