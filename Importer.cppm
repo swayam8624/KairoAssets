@@ -102,6 +102,7 @@ export namespace kairo::assets
             if(paths.size()>8192)throw std::length_error("Import dependency limit exceeded.");
             std::vector<ImportDependencyFingerprint> dependencies;
             dependencies.reserve(paths.size());
+            std::uintmax_t total=bytes.size();
             for(auto& path:paths)
             {
                 const auto relative=NormalizeAssetPath(path);
@@ -117,11 +118,13 @@ export namespace kairo::assets
                 }
                 if(!std::filesystem::is_regular_file(absolute))
                     throw std::invalid_argument("Import dependency is not a regular file.");
-                if(std::filesystem::file_size(absolute)>1024ull*1024ull*1024ull)
-                    throw std::length_error("Import dependency exceeds 1 GiB.");
+                const auto size=std::filesystem::file_size(absolute);
+                if(size>1024ull*1024ull*1024ull-total)
+                    throw std::length_error("Compound import exceeds 1 GiB aggregate source budget.");
+                total+=size;
                 dependencies.push_back({projectPath,FingerprintFile(absolute)});
             }
-            std::ranges::sort(dependencies,{},[](const auto& dependency){return dependency.Path.generic_string();});
+            std::ranges::sort(dependencies,{},[](const auto& dependency){return PortableAssetPathKey(dependency.Path);});
             if(std::adjacent_find(dependencies.begin(),dependencies.end(),[](const auto& a,const auto& b)
                 {return PortableAssetPathKey(a.Path)==PortableAssetPathKey(b.Path);})!=dependencies.end())
                 throw std::invalid_argument("Duplicate import dependency paths.");
