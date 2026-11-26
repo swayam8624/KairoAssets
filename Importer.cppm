@@ -1,6 +1,8 @@
 module;
 
+#include <algorithm>
 #include <cstddef>
+#include <string_view>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +45,10 @@ export namespace kairo::assets
         virtual ~AssetImporter() = default;
         [[nodiscard]] virtual std::string Identifier() const = 0;
         [[nodiscard]] virtual std::string Version() const = 0;
+        // Relative to the primary source directory. Discover even on a
+        // cache hit, since a sibling file can change without changing JSON.
+        [[nodiscard]] virtual std::vector<std::filesystem::path> DiscoverDependencies(const ImportRequest&) const
+        {return {};}
         [[nodiscard]] virtual DerivedArtifact Import(const ImportRequest& request) const = 0;
     };
 
@@ -90,14 +96,62 @@ export namespace kairo::assets
         if (!bytes.empty() && !input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
             throw std::runtime_error("Unable to read import source: " + source.string());
         record.SourceFingerprint = FingerprintBytes(bytes);
-        const DerivedDataKey key = MakeDerivedDataKey(record.SourceFingerprint, metadata.Type,
+        const auto discover=[&]()
+        {
+            auto paths=importer.DiscoverDependencies({record,metadata.Type,bytes,source});
+            if(paths.size()>8192)throw std::length_error("Import dependency limit exceeded.");
+            std::vector<ImportDependencyFingerprint> dependencies;
+            dependencies.reserve(paths.size());
+            for(auto& path:paths)
+            {
+                const auto relative=NormalizeAssetPath(path);
+                const auto projectPath=NormalizeAssetPath(record.Source.parent_path()/relative);
+                const auto absolute=projectRoot/projectPath;
+                // Reject symlinks in every component within the project.
+                auto cursor=projectRoot;
+                for(const auto& part:projectPath)
+                {
+                    cursor/=part;
+                    if(std::filesystem::is_symlink(cursor))
+                        throw std::invalid_argument("Linked import dependency rejected.");
+                }
+                if(!std::filesystem::is_regular_file(absolute))
+                    throw std::invalid_argument("Import dependency is not a regular file.");
+                if(std::filesystem::file_size(absolute)>1024ull*1024ull*1024ull)
+                    throw std::length_error("Import dependency exceeds 1 GiB.");
+                dependencies.push_back({projectPath,FingerprintFile(absolute)});
+            }
+            std::ranges::sort(dependencies,{},[](const auto& dependency){return dependency.Path.generic_string();});
+            if(std::adjacent_find(dependencies.begin(),dependencies.end(),[](const auto& a,const auto& b)
+                {return PortableAssetPathKey(a.Path)==PortableAssetPathKey(b.Path);})!=dependencies.end())
+                throw std::invalid_argument("Duplicate import dependency paths.");
+            return dependencies;
+        };
+        record.Dependencies=discover();
+        // Keep old keys for standalone files; length-prefix the relative
+        // dependency paths and bind their content digests for compound files.
+        auto recipeFingerprint=record.SourceFingerprint;
+        if(!record.Dependencies.empty())
+        {
+            std::string recipe="kairo.compound.v1\n"+record.SourceFingerprint.ToHex()+":"+
+                std::to_string(record.SourceFingerprint.ByteCount)+"\n";
+            for(const auto& dependency:record.Dependencies)
+            {
+                const auto name=dependency.Path.lexically_relative(record.Source.parent_path().empty()?
+                    std::filesystem::path("."):record.Source.parent_path()).generic_string();
+                recipe+=std::to_string(name.size())+":"+name+":"+dependency.Fingerprint.ToHex()+":"+
+                    std::to_string(dependency.Fingerprint.ByteCount)+"\n";
+            }
+            recipeFingerprint=FingerprintBytes(std::as_bytes(std::span(recipe.data(),recipe.size())));
+        }
+        const DerivedDataKey key = MakeDerivedDataKey(recipeFingerprint, metadata.Type,
             record.Importer, record.ImporterVersion, record.CanonicalSettings);
         if (const auto prior = imports.Find(record.Asset))
         {
             const bool changed = prior->Source != record.Source || prior->Importer != record.Importer ||
                 prior->ImporterVersion != record.ImporterVersion ||
                 prior->CanonicalSettings != record.CanonicalSettings ||
-                prior->SourceFingerprint != record.SourceFingerprint;
+                prior->SourceFingerprint != record.SourceFingerprint || prior->Dependencies!=record.Dependencies;
             if (changed)
             {
                 if (prior->Revision == std::numeric_limits<std::uint64_t>::max())
@@ -121,6 +175,8 @@ export namespace kairo::assets
             ValidateDerivedArtifact(artifact);
             if (artifact.Type != metadata.Type)
                 throw std::invalid_argument("Importer artifact type does not match asset registry metadata.");
+            if(!record.Dependencies.empty()&&discover()!=record.Dependencies)
+                throw std::runtime_error("Import dependencies changed during decoding.");
             cache.Store(key, SerializeDerivedArtifact(artifact));
         }
         if (artifact.Type != metadata.Type)
